@@ -31,6 +31,7 @@ struct Channel
     string name;
     string topic = "No topic set.";
     vector<string> users;
+    int numusers = 0;
 };
 
 struct User
@@ -89,7 +90,7 @@ int main(void)
   thread t(AcceptConnections);
   t.detach();
 
-
+  signal(SIGPIPE, SIG_IGN);
   char data[1024];
   char data2[1024];
   int datarecv;
@@ -134,12 +135,63 @@ int main(void)
               break;
           }
           }
+          /*
           if(piperip)
           {
               piperip = false;
+              for(int o = 0;o < connections[z].channel.size();o++)
+              {
+                  for(int l = 0; l < connections.size();l++)
+                  {
+                    for(int u =0;u < connections[l].channel.size();u++)
+                    {
+                        bool sentmsg = false;
+                        for(int as =0; as < connections[z].channel.size();as++)
+                        {
+                            if(connections[z].channel[as] == connections[l].channel[u])
+                            {
+                                string kd = string(":" + connections[z].username + " QUIT " + ":Quit" + "\r\n");
+
+                                write(connections[l].connfd,kd.c_str(),kd.size());
+                                sentmsg = true;
+                                break;
+                            }
+                        }
+                        if(sentmsg)
+                        {
+                            break;
+                        }
+                    }
+                  }
+              }
+              */
+          /*
+              for(int f =0;f < channels.size();f++)
+              {
+                  int channelindex = 0;
+                  for(int l = 0;l < channels.size();l++)
+                  {
+                      string p = channels[f].name;
+                      boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                      if(channels[l].name == p)
+                      {
+                          channelindex = l;
+
+                      }
+
+                  }
+                  for(int o = 0;o < channels[channelindex].users.size();o++)
+                  {
+                    if(channels[channelindex].users[o] == connections[z].username)
+                    {
+                        channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
+                    }
+                  }
+              }
               connections.erase(connections.begin() + z);
               continue;
           }
+          */
           vector<string> s;
           s.erase(s.begin(),s.end());
           boost::algorithm::split(s,data2,boost::is_any_of(" \n"),boost::token_compress_on);
@@ -181,17 +233,57 @@ int main(void)
 
                   if(!connections[z].userisauthed)
                   {
+                      bool killconn = false;
+                  for(int k =0; k < connections.size();k++)
+                  {
+                      string sfisdk = s[i+1];
+                      boost::remove_erase_if(sfisdk, boost::is_any_of(".,#\n\r"));
+                      if(sfisdk == connections[k].username)
+                      {
+                          killconn = true;
+                      }
+                  }
+                  if(killconn == true)
+                  {
+                      strcpy(sendBuff,string("NOTICE :*** Name already in use... Killing connection.\r\n").c_str());
+                      write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                      connections[z].dontkick = false;
+                      connections[z].rticks = 192;
+                  }
+                  else
+                  {
                   connections[z].username = s[i+1];
                   boost::remove_erase_if(connections[z].username, boost::is_any_of(".,#\n\r"));
                   strcpy(sendBuff,string("PING :" + connections[z].username + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
                   }
+                  }
                   else
                   {
+
+                          bool inuse = false;
+                      for(int k =0; k < connections.size();k++)
+                      {
+                          string sfisdk = s[i+1];
+                          boost::remove_erase_if(sfisdk, boost::is_any_of(".,#\n\r"));
+                          if(sfisdk == connections[k].username)
+                          {
+                              inuse = true;
+                          }
+                      }
+                      if(!inuse)
+                      {
                       strcpy(sendBuff,string(":" + connections[z].username + " NICK " + s[i+1] + "\r\n").c_str());
                       write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
                       connections[z].username = s[i+1];
-                  }
+                      }
+                      else
+                      {
+                          strcpy(sendBuff,string(":tinyirc " + string("NOTICE :*** Name already in use...") + "\r\n").c_str());
+                          write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                      }
+                    }
+
 
               }
               if(s[i] == "JOIN")
@@ -213,7 +305,6 @@ int main(void)
                   {
                       channels.push_back(Channel(s[i+1]));
                       channelindex = channels.size() - 1;
-                      this_thread::sleep_for(chrono::seconds(2));
                   }
                   channels[channelindex].users.push_back(connections[z].username);
                   boost::remove_erase_if(connections[z].channel[connections[z].channel.size() -1], boost::is_any_of(".,\n\r"));
@@ -223,14 +314,42 @@ int main(void)
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
                   strcpy(sendBuff,string(":tinyirc 332 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] +  " :" + channels[channelindex].topic + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 353 " + connections[z].username + " = " + connections[z].channel[connections[z].channel.size() -1] + " :@" + connections[z].username + "\r\n").c_str());
+                  string msgf = string(":tinyirc 353 " + connections[z].username + " = " + connections[z].channel[connections[z].channel.size() -1] + " :" + connections[z].username);
+                  for(int yf = 0;yf < channels[channelindex].users.size();yf++)
+                  {
+
+                      msgf += string(" ");
+                      msgf += channels[channelindex].users[yf];
+
+                  }
+                  msgf += "\r\n";
+                  strcpy(sendBuff,msgf.c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
                   strcpy(sendBuff,string(":tinyirc 366 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " :Sucessfully joined channel." +"\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  channels[channelindex].numusers++;
+                  for(int p = 0;p < connections.size(); p++)
+                  {
+                      for(int m = 0;m < connections[p].channel.size();m++)
+                      {
+                          if(connections[p].channel[m] == channels[channelindex].name)
+                          {
+                              if(p != z)
+                              {
+                              string ch = s[i+1];
+                              boost::remove_erase_if(ch,boost::is_any_of(":"));
+                              string kd = string(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
 
+                              write(connections[p].connfd,kd.c_str(),kd.size());
+                              }
+                              }
+                      }
+
+                  }
 
 
               }
+
               if(s[i] == "TOPIC")
               {
                  string msg = string(data2).substr(string(data2).find(":"));
@@ -238,6 +357,7 @@ int main(void)
                  {
                      if(channels[t].name == s[i+1])
                      {
+                         msg = msg.substr(1 ,msg.find("\r"));
                          channels[t].topic = msg;
                      }
                  }
@@ -247,7 +367,8 @@ int main(void)
                      {
                          if(connections[p].channel[m] == s[i+1])
                          {
-                             string kd = string(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg +"\r\n");
+
+                             string kd = string(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
 
                              write(connections[p].connfd,kd.c_str(),kd.size());
                          }
@@ -259,7 +380,7 @@ int main(void)
               }
               if(s[i] == "PRIVMSG")
               {
-                   string msg = string(data2).substr(string(data2).find(":"));
+                   string msg = string(data2).substr(string(data2).find(":"),string(data2).find("\r"));
 
                   //send privmsg to all other users in channel
                   for(int p = 0;p < connections.size(); p++)
@@ -270,7 +391,7 @@ int main(void)
                       {
                           if(connections[p].channel[m] == s[i+1])
                           {
-
+                              msg = msg.substr(0,msg.find("\r"));
                               strcpy(sendBuff,string(":" + connections[z].username + " PRIVMSG " + s[i+1] + " " + msg +"\r\n").c_str());
                               write(connections[p].connfd,sendBuff,strlen(sendBuff));
                           }
@@ -296,14 +417,79 @@ int main(void)
               }
               if(s[i] == "WHO")
               {
-                  strcpy(sendBuff,string(":tinyirc 352 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " 0 0" + "\r\n").c_str());
+                  int channelindex = 0;
+                  string p;
+                  for(int l = 0;l < channels.size();l++)
+                  {
+                      p = s[i+1];
+                      boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                      if(channels[l].name == p)
+                      {
+                          channelindex = l;
+
+                      }
+                  }
+
+                  strcpy(sendBuff,string(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  for(int h =0;h < channels[channelindex].users.size();h++)
+                  {
+                      strcpy(sendBuff,string(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + channels[channelindex].users[h] + "\r\n").c_str());
+                      write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  }
                   strcpy(sendBuff,string(":tinyirc 315 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " :End of /WHO list." + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
               }
               if(s[i] == "QUIT")
               {
                   connections[z].dontkick = false;
+                  for(int o = 0;o < connections[z].channel.size();o++)
+                  {
+                      for(int l = 0; l < connections.size();l++)
+                      {
+                        for(int u =0;u < connections[l].channel.size();u++)
+                        {
+                            bool sentmsg = false;
+                            for(int as =0; as < connections[z].channel.size();as++)
+                            {
+                                if(connections[z].channel[as] == connections[l].channel[u])
+                                {
+                                    string kd = string(":" + connections[z].username + " QUIT " + ":Quit" + "\r\n");
+
+                                    send(connections[l].connfd,kd.c_str(),kd.size(), MSG_NOSIGNAL);
+                                    sentmsg = true;
+                                    break;
+                                }
+                            }
+                            if(sentmsg)
+                            {
+                                break;
+                            }
+                        }
+                      }
+                  }
+                  for(int f =0;f < channels.size();f++)
+                  {
+                      int channelindex = 0;
+                      for(int l = 0;l < channels.size();l++)
+                      {
+                          string p = channels[f].name;
+                          boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                          if(channels[l].name == p)
+                          {
+                              channelindex = l;
+                              channels[channelindex].numusers--;
+                          }
+
+                      }
+                      for(int o = 0;o < channels[channelindex].users.size();o++)
+                      {
+                        if(channels[channelindex].users[o] == connections[z].username)
+                        {
+                            channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
+                        }
+                      }
+                  }
                   break;
               }
               if(s[i] == "PART")
@@ -311,6 +497,30 @@ int main(void)
                   vector<string> ctol;
 
                   boost::algorithm::split(ctol,s[i+1],boost::is_any_of(","),boost::token_compress_on);
+
+                  for(int f =0;f < ctol.size();f++)
+                  {
+                      int channelindex = 0;
+                      for(int l = 0;l < channels.size();l++)
+                      {
+                          string p = ctol[f];
+                          boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                          if(channels[l].name == p)
+                          {
+                              channelindex = l;
+                              channels[channelindex].numusers--;
+                          }
+
+                      }
+                      for(int o = 0;o < channels[channelindex].users.size();o++)
+                      {
+                        if(channels[channelindex].users[o] == connections[z].username)
+                        {
+
+                            channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
+                        }
+                      }
+                  }
                   for(int f =0;f < ctol.size();f++)
                   {
                       for(int q =0;q < connections[z].channel.size();q++)
@@ -320,6 +530,29 @@ int main(void)
                               connections[z].channel.erase(connections[z].channel.begin() + q);
                           }
                       }
+                  }
+                  for(int p = 0;p < connections.size(); p++)
+                  {
+                      for(int m = 0;m < connections[p].channel.size();m++)
+                      {
+                          for(int gh = 0;gh < ctol.size();gh++)
+                          {
+                              string kdr = string(":" + connections[z].username + " PART " + ctol[gh] + "\r\n");
+
+                              write(connections[z].connfd,kdr.c_str(),kdr.size());
+                          if(connections[p].channel[m] == ctol[gh])
+                          {
+
+                              string ch = s[i+1];
+                              boost::remove_erase_if(ch,boost::is_any_of(":"));
+                              string kd = string(":" + connections[z].username + " PART " + ctol[gh] + "\r\n");
+
+                              write(connections[p].connfd,kd.c_str(),kd.size());
+
+                           }
+                          }
+                      }
+
                   }
               }
               if(s[i] == "PROTOCTL")
@@ -358,6 +591,53 @@ int main(void)
           if(!connections[z].dontkick && connections[z].rticks == 192)
           {
               close(connections[z].connfd);
+              for(int o = 0;o < connections[z].channel.size();o++)
+              {
+                  for(int l = 0; l < connections.size();l++)
+                  {
+                    for(int u =0;u < connections[l].channel.size();u++)
+                    {
+                        bool sentmsg = false;
+                        for(int as =0; as < connections[z].channel.size();as++)
+                        {
+                            if(connections[z].channel[as] == connections[l].channel[u])
+                            {
+                                string kd = string(":" + connections[z].username + " QUIT " + ":Ping timed out" + "\r\n");
+
+                                write(connections[l].connfd,kd.c_str(),kd.size());
+                                sentmsg = true;
+                                break;
+                            }
+                        }
+                        if(sentmsg)
+                        {
+                            break;
+                        }
+                    }
+                  }
+              }
+              for(int f =0;f < channels.size();f++)
+              {
+                  int channelindex = 0;
+                  for(int l = 0;l < channels.size();l++)
+                  {
+                      string p = channels[f].name;
+                      boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                      if(channels[l].name == p)
+                      {
+                          channelindex = l;
+                          channels[channelindex].numusers--;
+                      }
+
+                  }
+                  for(int o = 0;o < channels[channelindex].users.size();o++)
+                  {
+                    if(channels[channelindex].users[o] == connections[z].username)
+                    {
+                        channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
+                    }
+                  }
+              }
                connections.erase(connections.begin() + z);
                continue;
           }
