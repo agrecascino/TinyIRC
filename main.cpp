@@ -104,6 +104,61 @@ int main(void)
 
          for(int z = 0;z < connections.size();z++)
           {
+             if(0)
+             {
+                 killconn:
+                 close(connections[z].connfd);
+                 for(int o = 0;o < connections[z].channel.size();o++)
+                 {
+                     for(int l = 0; l < connections.size();l++)
+                     {
+                       for(int u =0;u < connections[l].channel.size();u++)
+                       {
+                           bool sentmsg = false;
+                           for(int as =0; as < connections[z].channel.size();as++)
+                           {
+                               if(connections[z].channel[as] == connections[l].channel[u])
+                               {
+                                   string kd = string(":" + connections[z].username + " QUIT " + ":Socket killer." + "\r\n");
+
+                                   write(connections[l].connfd,kd.c_str(),kd.size());
+                                   sentmsg = true;
+                                   break;
+                               }
+                           }
+                           if(sentmsg)
+                           {
+                               break;
+                           }
+                       }
+                     }
+                 }
+                 for(int f =0;f < channels.size();f++)
+                 {
+                     int channelindex = 0;
+                     for(int l = 0;l < channels.size();l++)
+                     {
+                         string p = channels[f].name;
+                         boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                         if(channels[l].name == p)
+                         {
+                             channelindex = l;
+                             channels[channelindex].numusers--;
+                         }
+
+                     }
+                     for(int o = 0;o < channels[channelindex].users.size();o++)
+                     {
+                       if(channels[channelindex].users[o] == connections[z].username)
+                       {
+                           channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
+                       }
+                     }
+                 }
+                  connections.erase(connections.begin() + z);
+                  continue;
+                 //hack to keep variables in scope
+             }
          // strcpy(sendBuff,"NOTICE AUTH:*** Ayy lmao\r\n");
           //cout << sendBuff << endl;
           memset(&data2,'0',1024);
@@ -126,7 +181,7 @@ int main(void)
 
           if(datarecv == 0)
           {
-              break;
+              goto killconn;
           }
 
           data2[i] = data[0];
@@ -192,6 +247,7 @@ int main(void)
               continue;
           }
           */
+
           vector<string> s;
           s.erase(s.begin(),s.end());
           boost::algorithm::split(s,data2,boost::is_any_of(" \n"),boost::token_compress_on);
@@ -236,7 +292,7 @@ int main(void)
                       bool killconn = false;
                   for(int k =0; k < connections.size();k++)
                   {
-                      string sfisdk = s[i+1];
+                      string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
                       boost::remove_erase_if(sfisdk, boost::is_any_of(".,#\n\r"));
                       if(sfisdk == connections[k].username)
                       {
@@ -252,7 +308,7 @@ int main(void)
                   }
                   else
                   {
-                  connections[z].username = s[i+1];
+                  connections[z].username = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
                   boost::remove_erase_if(connections[z].username, boost::is_any_of(".,#\n\r"));
                   strcpy(sendBuff,string("PING :" + connections[z].username + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
@@ -264,7 +320,7 @@ int main(void)
                           bool inuse = false;
                       for(int k =0; k < connections.size();k++)
                       {
-                          string sfisdk = s[i+1];
+                          string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
                           boost::remove_erase_if(sfisdk, boost::is_any_of(".,#\n\r"));
                           if(sfisdk == connections[k].username)
                           {
