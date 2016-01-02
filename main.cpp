@@ -3,15 +3,12 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <netinet/in.h>
-#include <boost/range/algorithm.hpp>
-#include <boost/range/algorithm_ext/erase.hpp>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstring>
 #include <chrono>
 #include <signal.h>
-#include <boost/algorithm/string.hpp>
 #include <errno.h>
 #include <string.h>
 #include <time.h>
@@ -21,6 +18,7 @@
 #include <sys/types.h>
 #include <thread>
 using namespace std;
+string remove_erase_if(string c, string delim);
 struct Channel
 {
     string name;
@@ -30,7 +28,8 @@ struct Channel
     Channel(string n)
     {
       name = n;
-      boost::remove_erase_if(name,boost::is_any_of(" \n\r"));
+      name = remove_erase_if(name," \n\r");
+      //raise(SIGABRT);
     }
 
    
@@ -52,6 +51,72 @@ struct User
     }
    
 };
+string remove_erase_if(string c, string delim)
+{
+    string output;
+    for(unsigned int i = 0; i < c.size();i++)
+    {
+        bool pass = true;
+        for(int k = 0;k < delim.size();k++)
+        {
+        if(c[i] == delim[k])
+        {
+            pass = false;
+        }
+        }
+        if(pass)
+        {
+            output += c[i];
+        }
+    }
+    return output;
+}
+string cleanup_chars_after_delim(string k , char delim)
+{
+    string output;
+    for(int i = 0;i < k.size();i++)
+    {
+        if(k[i] == delim)
+        {
+            break;
+        }
+        output += k[i];
+    }
+    return output;
+}
+
+void split_string(string k , string delim, vector<string> &output)
+{
+    int getdelimcount = 0;
+    for(unsigned int i =0;i < k.size();i++)
+    {
+        for(int o = 0;o < delim.size();o++)
+        {
+        if(k[i] == delim[o])
+        {
+            getdelimcount++;
+        }
+        }
+    }
+    for(int z = 0;z < k.size();z++ )
+    {
+        for(int i = 1;i < delim.size();i++)
+        {
+            if(k[z] == delim[i])
+            {
+                k[z] = delim[0];
+            }
+        }
+    }
+    for(int i =0;i <= getdelimcount;i++)
+    {
+       int delimiter = k.find(delim[0]);
+          output.push_back(k.substr(0, delimiter));
+          k = k.substr(delimiter + 1, k.size());
+    }
+}
+
+
 vector<User> connections;
 vector<Channel> channels;
 int listenfd = 0,connfd = 0;
@@ -157,7 +222,7 @@ int main(int argc,char *argv[])
                      for(int l = 0;l < channels.size();l++)
                      {
                          string p = channels[f].name;
-                         boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                         p = remove_erase_if(p," \r\n");
                          if(channels[l].name == p)
                          {
                              channelindex = l;
@@ -213,7 +278,9 @@ int main(int argc,char *argv[])
 
           vector<string> s;
           s.erase(s.begin(),s.end());
-          boost::algorithm::split(s,data2,boost::is_any_of(" \n"),boost::token_compress_on);
+          string data2c = data2;
+          data2c = cleanup_chars_after_delim(data2c,'\0');
+          split_string(data2c," \n",s);
           //split packet by whitespace
           for(int i =0;i < s.size();i++)
           {
@@ -262,7 +329,7 @@ int main(int argc,char *argv[])
                       {
                           sfisdk = "FAGGOT" + to_string(rand() % 9000);
                       }
-                      boost::remove_erase_if(sfisdk, boost::is_any_of(".,#\n\r"));
+                      sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
                       if(sfisdk == connections[k].username)
                       {
                           killconn = true;
@@ -277,13 +344,13 @@ int main(int argc,char *argv[])
                   }
                   else
                   {
-                  string sfisdk = sring(s[i+1]).substr(0,string(s[i+1]).find("\r"));;
+                  string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));;
                   if(sfisdk.size() > 225)
                   {
                       sfisdk = "FAGGOT" + to_string(rand() % 9000);
                   }
                   connections[z].username = sfisdk;
-                  boost::remove_erase_if(connections[z].username, boost::is_any_of(".,#\n\r"));
+                  sfisdk = remove_erase_if(connections[z].username, ".,#\n\r");
                   strcpy(sendBuff,string("PING :" + connections[z].username + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
                   }
@@ -299,7 +366,7 @@ int main(int argc,char *argv[])
                           {
                           sfisdk = "FAGGOT" + to_string(rand() % 9000);
                           }
-                          boost::remove_erase_if(sfisdk, boost::is_any_of(".,#\n\r"));
+                          sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
                           if(sfisdk == connections[k].username)
                           {
                               inuse = true;
@@ -307,9 +374,15 @@ int main(int argc,char *argv[])
                       }
                       if(!inuse)
                       {
-                      strcpy(sendBuff,string(":" + connections[z].username + " NICK " + s[i+1] + "\r\n").c_str());
+                      string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
+                      if(sfisdk.size() > 225)
+                      {
+                      sfisdk = "FAGGOT" + to_string(rand() % 9000);
+                      }
+                      sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
+                      strcpy(sendBuff,string(":" + connections[z].username + " NICK " + sfisdk + "\r\n").c_str());
                       write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                      connections[z].username = s[i+1];
+
                       }
                       else
                       {
@@ -328,7 +401,7 @@ int main(int argc,char *argv[])
                   for(int l = 0;l < channels.size();l++)
                   {
                       string p = s[i+1];
-                      boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                      p = remove_erase_if(p," \r\n");
                       if(channels[l].name == p)
                       {
                           channelindex = l;
@@ -341,7 +414,7 @@ int main(int argc,char *argv[])
                       channelindex = channels.size() - 1;
                   }
                   channels[channelindex].users.push_back(connections[z].username);
-                  boost::remove_erase_if(connections[z].channel[connections[z].channel.size() -1], boost::is_any_of(".,\n\r"));
+                  connections[z].channel[connections[z].channel.size() -1] = remove_erase_if(connections[z].channel[connections[z].channel.size() -1], ".,\n\r");
                   strcpy(sendBuff,string(":"+ connections[z].username + " JOIN :" + connections[z].channel[connections[z].channel.size() - 1] + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
                   strcpy(sendBuff,string(":tinyirc MODE :" + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n").c_str());
@@ -371,7 +444,7 @@ int main(int argc,char *argv[])
                               if(p != z)
                               {
                               string ch = s[i+1];
-                              boost::remove_erase_if(ch,boost::is_any_of(":"));
+                              ch = remove_erase_if(ch,":");
                               string kd = string(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
 
                               write(connections[p].connfd,kd.c_str(),kd.size());
@@ -458,7 +531,7 @@ int main(int argc,char *argv[])
                   for(int l = 0;l < channels.size();l++)
                   {
                       p = s[i+1];
-                      boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                      p = remove_erase_if(p," \r\n");
                       if(channels[l].name == p)
                       {
                           channelindex = l;
@@ -473,7 +546,7 @@ int main(int argc,char *argv[])
                       strcpy(sendBuff,string(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + channels[channelindex].users[h] + "\r\n").c_str());
                       write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
                   }
-                  strcpy(sendBuff,string(":tinyirc 315 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " :End of /WHO list." + "\r\n").c_str());
+                  strcpy(sendBuff,string(":tinyirc 315 " + connections[z].username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
               }
               if(s[i] == "QUIT")
@@ -510,7 +583,7 @@ int main(int argc,char *argv[])
                       for(int l = 0;l < channels.size();l++)
                       {
                           string p = channels[f].name;
-                          boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                          p = remove_erase_if(p," \r\n");
                           if(channels[l].name == p)
                           {
                               channelindex = l;
@@ -532,7 +605,7 @@ int main(int argc,char *argv[])
               {
                   vector<string> ctol;
 
-                  boost::algorithm::split(ctol,s[i+1],boost::is_any_of(","),boost::token_compress_on);
+                  split_string(string(s[i+1]),",",ctol);
 
                   for(int f =0;f < ctol.size();f++)
                   {
@@ -540,7 +613,8 @@ int main(int argc,char *argv[])
                       for(int l = 0;l < channels.size();l++)
                       {
                           string p = ctol[f];
-                          boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                          p = remove_erase_if(p," \r\n");
+                          //raise(SIGABRT);
                           if(channels[l].name == p)
                           {
                               channelindex = l;
@@ -580,7 +654,7 @@ int main(int argc,char *argv[])
                           {
 
                               string ch = s[i+1];
-                              boost::remove_erase_if(ch,boost::is_any_of(":"));
+                              ch = remove_erase_if(ch,":");
                               string kd = string(":" + connections[z].username + " PART " + ctol[gh] + "\r\n");
 
                               write(connections[p].connfd,kd.c_str(),kd.size());
@@ -658,7 +732,7 @@ int main(int argc,char *argv[])
                   for(int l = 0;l < channels.size();l++)
                   {
                       string p = channels[f].name;
-                      boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
+                      p = remove_erase_if(p," \r\n");
                       if(channels[l].name == p)
                       {
                           channelindex = l;
