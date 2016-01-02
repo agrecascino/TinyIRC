@@ -48,7 +48,11 @@ struct User
         connfd = c;
 
     }
-   
+
+    ssize_t write(std::string data)
+    {
+        return ::write(connfd, data.c_str(), data.size());
+    }
 };
 string remove_erase_if(string c, string delim)
 {
@@ -199,9 +203,7 @@ int main(int argc,char *argv[])
                            {
                                if(connections[z].channel[as] == connections[l].channel[u])
                                {
-                                   string kd = string(":" + connections[z].username + " QUIT " + ":Socket killer." + "\r\n");
-
-                                   write(connections[l].connfd,kd.c_str(),kd.size());
+                                   connections[l].write(":" + connections[z].username + " QUIT " + ":Socket killer." + "\r\n");
                                    sentmsg = true;
                                    break;
                                }
@@ -295,21 +297,13 @@ int main(int argc,char *argv[])
               if(s[i] == "PONG" && !connections[z].userisauthed)
               {
                   //oh nice, you accepted our PING, welcome to the party
-                  string buf;
-                  buf = ":tinyirc 001 " + connections[z].username + " :Hello!" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf = ":tinyirc 002 " + connections[z].username + " :This server is running TinyIRC pre-alpha!" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf = ":tinyirc 003 " + connections[z].username + " :This server doesn't have date tracking." + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf = ":tinyirc 004 " + connections[z].username + " tinyirc " + " tinyirc(0.0.1) " + "CDGNRSUWagilopqrswxyz" + " BCIMNORSabcehiklmnopqstvz" + " Iabehkloqv" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf = ":tinyirc 005 " + connections[z].username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf = ":tinyirc 005 " + connections[z].username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf = ":tinyirc 251 " + connections[z].username + " :LUSERS is unimplemented." + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  connections[z].write(":tinyirc 001 " + connections[z].username + " :Hello!" + "\r\n");
+                  connections[z].write(":tinyirc 002 " + connections[z].username + " :This server is running TinyIRC pre-alpha!" + "\r\n");
+                  connections[z].write(":tinyirc 003 " + connections[z].username + " :This server doesn't have date tracking." + "\r\n");
+                  connections[z].write(":tinyirc 004 " + connections[z].username + " tinyirc " + " tinyirc(0.0.1) " + "CDGNRSUWagilopqrswxyz" + " BCIMNORSabcehiklmnopqstvz" + " Iabehkloqv" + "\r\n");
+                  connections[z].write(":tinyirc 005 " + connections[z].username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n");
+                  connections[z].write(":tinyirc 005 " + connections[z].username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n");
+                  connections[z].write(":tinyirc 251 " + connections[z].username + " :LUSERS is unimplemented." + "\r\n");
                   connections[z].userisauthed = true;
 
                   connections[z].dontkick = true;
@@ -336,9 +330,7 @@ int main(int argc,char *argv[])
                   if(killconn)
                   {
                       //CS major meme killconn == true
-                      string buf;
-                      buf = "NOTICE :*** Name already in use... Killing connection.\r\n";
-                      write(connections[z].connfd,buf.c_str(),buf.size());
+                      connections[z].write("NOTICE :*** Name already in use... Killing connection.\r\n");
                       connections[z].dontkick = false;
                       connections[z].rticks = 192;
                   }
@@ -351,9 +343,7 @@ int main(int argc,char *argv[])
                   }
                   connections[z].username = sfisdk;
                   sfisdk = remove_erase_if(connections[z].username, ".,#\n\r");
-                  string buf;
-                  buf = "PING :" + connections[z].username + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  connections[z].write("PING :" + connections[z].username + "\r\n");
                   }
                   }
                   else
@@ -381,16 +371,11 @@ int main(int argc,char *argv[])
                       sfisdk = "FAGGOT" + to_string(rand() % 9000);
                       }
                       sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
-                      string buf;
-                      buf =":" + connections[z].username + " NICK " + sfisdk + "\r\n";
-                      write(connections[z].connfd,buf.c_str(),buf.size());
-
+                          connections[z].write(":" + connections[z].username + " NICK " + sfisdk + "\r\n");
                       }
                       else
                       {
-                          string buf;
-                          buf =":tinyirc " + string("NOTICE :*** Name already in use...") + "\r\n";
-                          write(connections[z].connfd,buf.c_str(),buf.size());
+                          connections[z].write(":tinyirc " "NOTICE :*** Name already in use..." "\r\n");
                       }
                     }
 
@@ -419,22 +404,18 @@ int main(int argc,char *argv[])
                   string buf;
                   channels[channelindex].users.push_back(connections[z].username);
                   connections[z].channel[connections[z].channel.size() -1] = remove_erase_if(connections[z].channel[connections[z].channel.size() -1], ".,\n\r");
-                  buf =":"+ connections[z].username + " JOIN :" + connections[z].channel[connections[z].channel.size() - 1] + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc MODE :" + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 332 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] +  " :" + channels[channelindex].topic + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  string msgf = string(":tinyirc 353 " + connections[z].username + " = " + connections[z].channel[connections[z].channel.size() -1] + " :" + connections[z].username);
+                  connections[z].write(":"+ connections[z].username + " JOIN :" + connections[z].channel[connections[z].channel.size() - 1] + "\r\n");
+                  connections[z].write(":tinyirc MODE :" + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n");
+                  connections[z].write(":tinyirc 332 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] +  " :" + channels[channelindex].topic + "\r\n");
+                  string msgf(":tinyirc 353 " + connections[z].username + " = " + connections[z].channel[connections[z].channel.size() -1] + " :" + connections[z].username);
                   for(int yf = 0;yf < channels[channelindex].users.size();yf++)
                   {
                       msgf += string(" ");
                       msgf += channels[channelindex].users[yf];
                   }
                   msgf += "\r\n";
-                  write(connections[z].connfd,msgf.c_str(),msgf.size());
-                  buf =":tinyirc 366 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " :Sucessfully joined channel." +"\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  connections[z].write(msgf);
+                  connections[z].write(":tinyirc 366 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " :Sucessfully joined channel." +"\r\n");
                   channels[channelindex].numusers++;
                   for(int p = 0;p < connections.size(); p++)
                   {
@@ -446,9 +427,7 @@ int main(int argc,char *argv[])
                               {
                               string ch = s[i+1];
                               ch = remove_erase_if(ch,":");
-                              string kd = string(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
-
-                              write(connections[p].connfd,kd.c_str(),kd.size());
+                              connections[p].write(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
                               }
                               }
                       }
@@ -469,16 +448,14 @@ int main(int argc,char *argv[])
                          channels[t].topic = msg;
                      }
                  }
+                 string kd(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
                  for(int p = 0;p < connections.size(); p++)
                  {
                      for(int m = 0;m < connections[p].channel.size();m++)
                      {
                          if(connections[p].channel[m] == s[i+1])
                          {
-
-                             string kd = string(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
-
-                             write(connections[p].connfd,kd.c_str(),kd.size());
+                             connections[p].write(kd);
                          }
                      }
 
@@ -491,6 +468,7 @@ int main(int argc,char *argv[])
                    string msg = string(data2).substr(string(data2).find(":"),string(data2).find("\r"));
 
                   //send privmsg to all other users in channel
+                  string buf(":" + connections[z].username + " PRIVMSG " + s[i+1] + " " + msg +"\r\n");
                   for(int p = 0;p < connections.size(); p++)
                   {
                       if(p != z)
@@ -499,9 +477,7 @@ int main(int argc,char *argv[])
                       {
                           if(connections[p].channel[m] == s[i+1])
                           {
-                              msg = msg.substr(0,msg.find("\r"));
-                              string buf = string(":" + connections[z].username + " PRIVMSG " + s[i+1] + " " + msg +"\r\n");
-                              write(connections[p].connfd,buf.c_str(),buf.size());
+                              connections[p].write(buf);
                           }
                       }
                       }
@@ -514,16 +490,13 @@ int main(int argc,char *argv[])
                   string buf;
                   if(connections[z].channel.size() != 0)
                   {
-                  buf =":tinyirc 324 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 329 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " 0 0" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
+                      connections[z].write(":tinyirc 324 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n");
+                      connections[z].write(":tinyirc 329 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " 0 0" + "\r\n");
                   }
                   else
                   {
                       connections[z].detectautisticclient = true;
-                      buf =":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n";
-                      write(connections[z].connfd,buf.c_str(),buf.size());
+                      connections[z].write(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n");
                   }
               }
               if(s[i] == "WHO")
@@ -539,15 +512,13 @@ int main(int argc,char *argv[])
                           channelindex = l;
                       }
                   }
-                  string buf = string(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n");
-                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  string buf(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n");
+                  connections[z].write(buf);
                   for(int h =0;h < channels[channelindex].users.size();h++)
                   {
-                      buf = string(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + channels[channelindex].users[h] + "\r\n");
-                      write(connections[z].connfd,buf.c_str(),buf.size());
+                      connections[z].write(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + channels[channelindex].users[h] + "\r\n");
                   }
-                  buf = string(":tinyirc 315 " + connections[z].username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n");
-                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  connections[z].write(":tinyirc 315 " + connections[z].username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n");
               }
               if(s[i] == "QUIT")
               {
@@ -649,7 +620,7 @@ int main(int argc,char *argv[])
                           {
                               string kdr = string(":" + connections[z].username + " PART " + ctol[gh] + "\r\n");
 
-                              write(connections[z].connfd,kdr.c_str(),kdr.size());
+                              connections[z].write(kdr);
                           if(connections[p].channel[m] == ctol[gh])
                           {
 
@@ -657,7 +628,7 @@ int main(int argc,char *argv[])
                               ch = remove_erase_if(ch,":");
                               string kd = string(":" + connections[z].username + " PART " + ctol[gh] + "\r\n");
 
-                              write(connections[p].connfd,kd.c_str(),kd.size());
+                              connections[p].write(kd);
 
                            }
                           }
@@ -669,28 +640,18 @@ int main(int argc,char *argv[])
               {
                  string buf;
                   //gives capabilities of the server, some irc clients dont send one for some reason (im looking at you two irssi and weechat)
-                  buf =":tinyirc 252 " + connections[z].username + " 0 :IRC Operators online" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 253 " + connections[z].username + " 0 :unknown connections" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 254 " + connections[z].username + " 0 :LUSERS is unimplmented" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 255 " + connections[z].username + " :LUSERS is unimplmented" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 265 " + connections[z].username + " 1 1 :LUSERS is unimplmented" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 266 " + connections[z].username + " 1 1 :LUSERS is unimplmented" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 375 " + connections[z].username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 372 " + connections[z].username + " :Padding call" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 376 " + connections[z].username + " :Ended" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  connections[z].write(":tinyirc 252 " + connections[z].username + " 0 :IRC Operators online" + "\r\n");
+                  connections[z].write(":tinyirc 253 " + connections[z].username + " 0 :unknown connections" + "\r\n");
+                  connections[z].write(":tinyirc 254 " + connections[z].username + " 0 :LUSERS is unimplmented" + "\r\n");
+                  connections[z].write(":tinyirc 255 " + connections[z].username + " :LUSERS is unimplmented" + "\r\n");
+                  connections[z].write(":tinyirc 265 " + connections[z].username + " 1 1 :LUSERS is unimplmented" + "\r\n");
+                  connections[z].write(":tinyirc 266 " + connections[z].username + " 1 1 :LUSERS is unimplmented" + "\r\n");
+                  connections[z].write(":tinyirc 375 " + connections[z].username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n");
+                  connections[z].write(":tinyirc 372 " + connections[z].username + " :Padding call" + "\r\n");
+                  connections[z].write(":tinyirc 376 " + connections[z].username + " :Ended" + "\r\n");
                   if(!connections[z].detectautisticclient)
                   {
-                  buf =":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n";
-                  write(connections[z].connfd,buf.c_str(),buf.size());
+                      connections[z].write(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n");
                   }
               }
           }
@@ -712,9 +673,7 @@ int main(int argc,char *argv[])
                         {
                             if(connections[z].channel[as] == connections[l].channel[u])
                             {
-                                string kd = string(":" + connections[z].username + " QUIT " + ":Ping timed out" + "\r\n");
-
-                                write(connections[l].connfd,kd.c_str(),kd.size());
+                                connections[l].write(":" + connections[z].username + " QUIT " + ":Ping timed out" + "\r\n");
                                 sentmsg = true;
                                 break;
                             }
@@ -764,8 +723,6 @@ int main(int argc,char *argv[])
           cout << connections[z].username << endl;
          // cout << "Proccessing connections" << endl;
          this_thread::sleep_for(chrono::milliseconds(50));
-          //write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-
          }
       }
 
