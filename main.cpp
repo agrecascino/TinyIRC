@@ -119,7 +119,6 @@ void split_string(string k , string delim, vector<string> &output)
 vector<User> connections;
 vector<Channel> channels;
 int listenfd = 0,connfd = 0;
-char sendBuff[1025];
   int connc = 0;
   struct sockaddr_in serv_addr;
   void AcceptConnections();
@@ -160,7 +159,6 @@ int main(int argc,char *argv[])
   printf("socket retrieve success\n");
 
   memset(&serv_addr, '0', sizeof(serv_addr));
-  memset(sendBuff, '0', sizeof(sendBuff));
 
   serv_addr.sin_family = AF_INET;
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -297,20 +295,21 @@ int main(int argc,char *argv[])
               if(s[i] == "PONG" && !connections[z].userisauthed)
               {
                   //oh nice, you accepted our PING, welcome to the party
-                  strcpy(sendBuff,string(":tinyirc 001 " + connections[z].username + " :Hello!" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 002 " + connections[z].username + " :This server is running TinyIRC pre-alpha!" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 003 " + connections[z].username + " :This server doesn't have date tracking." + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 004 " + connections[z].username + " tinyirc " + " tinyirc(0.0.1) " + "CDGNRSUWagilopqrswxyz" + " BCIMNORSabcehiklmnopqstvz" + " Iabehkloqv" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 005 " + connections[z].username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 005 " + connections[z].username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 251 " + connections[z].username + " :LUSERS is unimplemented." + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  string buf;
+                  buf = ":tinyirc 001 " + connections[z].username + " :Hello!" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf = ":tinyirc 002 " + connections[z].username + " :This server is running TinyIRC pre-alpha!" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf = ":tinyirc 003 " + connections[z].username + " :This server doesn't have date tracking." + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf = ":tinyirc 004 " + connections[z].username + " tinyirc " + " tinyirc(0.0.1) " + "CDGNRSUWagilopqrswxyz" + " BCIMNORSabcehiklmnopqstvz" + " Iabehkloqv" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf = ":tinyirc 005 " + connections[z].username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf = ":tinyirc 005 " + connections[z].username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf = ":tinyirc 251 " + connections[z].username + " :LUSERS is unimplemented." + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
                   connections[z].userisauthed = true;
 
                   connections[z].dontkick = true;
@@ -334,10 +333,12 @@ int main(int argc,char *argv[])
                           killconn = true;
                       }
                   }
-                  if(killconn == true)
+                  if(killconn)
                   {
-                      strcpy(sendBuff,string("NOTICE :*** Name already in use... Killing connection.\r\n").c_str());
-                      write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                      //CS major meme killconn == true
+                      string buf;
+                      buf = "NOTICE :*** Name already in use... Killing connection.\r\n";
+                      write(connections[z].connfd,buf.c_str(),buf.size());
                       connections[z].dontkick = false;
                       connections[z].rticks = 192;
                   }
@@ -350,8 +351,9 @@ int main(int argc,char *argv[])
                   }
                   connections[z].username = sfisdk;
                   sfisdk = remove_erase_if(connections[z].username, ".,#\n\r");
-                  strcpy(sendBuff,string("PING :" + connections[z].username + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  string buf;
+                  buf = "PING :" + connections[z].username + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
                   }
                   }
                   else
@@ -379,14 +381,16 @@ int main(int argc,char *argv[])
                       sfisdk = "FAGGOT" + to_string(rand() % 9000);
                       }
                       sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
-                      strcpy(sendBuff,string(":" + connections[z].username + " NICK " + sfisdk + "\r\n").c_str());
-                      write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                      string buf;
+                      buf =":" + connections[z].username + " NICK " + sfisdk + "\r\n";
+                      write(connections[z].connfd,buf.c_str(),buf.size());
 
                       }
                       else
                       {
-                          strcpy(sendBuff,string(":tinyirc " + string("NOTICE :*** Name already in use...") + "\r\n").c_str());
-                          write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                          string buf;
+                          buf =":tinyirc " + string("NOTICE :*** Name already in use...") + "\r\n";
+                          write(connections[z].connfd,buf.c_str(),buf.size());
                       }
                     }
 
@@ -412,32 +416,30 @@ int main(int argc,char *argv[])
                       channels.push_back(Channel(s[i+1]));
                       channelindex = channels.size() - 1;
                   }
+                  string buf;
                   channels[channelindex].users.push_back(connections[z].username);
                   connections[z].channel[connections[z].channel.size() -1] = remove_erase_if(connections[z].channel[connections[z].channel.size() -1], ".,\n\r");
-                  strcpy(sendBuff,string(":"+ connections[z].username + " JOIN :" + connections[z].channel[connections[z].channel.size() - 1] + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc MODE :" + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 332 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] +  " :" + channels[channelindex].topic + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  buf =":"+ connections[z].username + " JOIN :" + connections[z].channel[connections[z].channel.size() - 1] + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc MODE :" + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc 332 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] +  " :" + channels[channelindex].topic + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
                   string msgf = string(":tinyirc 353 " + connections[z].username + " = " + connections[z].channel[connections[z].channel.size() -1] + " :" + connections[z].username);
                   for(int yf = 0;yf < channels[channelindex].users.size();yf++)
                   {
-
                       msgf += string(" ");
                       msgf += channels[channelindex].users[yf];
-
                   }
                   msgf += "\r\n";
-                  strcpy(sendBuff,msgf.c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 366 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " :Sucessfully joined channel." +"\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  write(connections[z].connfd,msgf.c_str(),msgf.size());
+                  buf =":tinyirc 366 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " :Sucessfully joined channel." +"\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
                   channels[channelindex].numusers++;
                   for(int p = 0;p < connections.size(); p++)
                   {
                       for(int m = 0;m < connections[p].channel.size();m++)
-                      {
+
                           if(connections[p].channel[m] == channels[channelindex].name)
                           {
                               if(p != z)
@@ -454,7 +456,7 @@ int main(int argc,char *argv[])
                   }
 
 
-              }
+
 
               if(s[i] == "TOPIC")
               {
@@ -498,8 +500,8 @@ int main(int argc,char *argv[])
                           if(connections[p].channel[m] == s[i+1])
                           {
                               msg = msg.substr(0,msg.find("\r"));
-                              strcpy(sendBuff,string(":" + connections[z].username + " PRIVMSG " + s[i+1] + " " + msg +"\r\n").c_str());
-                              write(connections[p].connfd,sendBuff,strlen(sendBuff));
+                              string buf = string(":" + connections[z].username + " PRIVMSG " + s[i+1] + " " + msg +"\r\n");
+                              write(connections[p].connfd,buf.c_str(),buf.size());
                           }
                       }
                       }
@@ -509,18 +511,19 @@ int main(int argc,char *argv[])
               {
                   //set user mode, required for some irc clients to think you're fully connected(im looking at you xchat)
                   //+i means no messages from people outside the channel and that mode reflects how the server works
+                  string buf;
                   if(connections[z].channel.size() != 0)
                   {
-                  strcpy(sendBuff,string(":tinyirc 324 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 329 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " 0 0" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  buf =":tinyirc 324 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc 329 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " 0 0" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
                   }
                   else
                   {
                       connections[z].detectautisticclient = true;
-                      strcpy(sendBuff,string(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n").c_str());
-                      write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                      buf =":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n";
+                      write(connections[z].connfd,buf.c_str(),buf.size());
                   }
               }
               if(s[i] == "WHO")
@@ -534,19 +537,17 @@ int main(int argc,char *argv[])
                       if(channels[l].name == p)
                       {
                           channelindex = l;
-
                       }
                   }
-
-                  strcpy(sendBuff,string(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  string buf = string(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n");
+                  write(connections[z].connfd,buf.c_str(),buf.size());
                   for(int h =0;h < channels[channelindex].users.size();h++)
                   {
-                      strcpy(sendBuff,string(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + channels[channelindex].users[h] + "\r\n").c_str());
-                      write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                      buf = string(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + channels[channelindex].users[h] + "\r\n");
+                      write(connections[z].connfd,buf.c_str(),buf.size());
                   }
-                  strcpy(sendBuff,string(":tinyirc 315 " + connections[z].username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  buf = string(":tinyirc 315 " + connections[z].username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n");
+                  write(connections[z].connfd,buf.c_str(),buf.size());
               }
               if(s[i] == "QUIT")
               {
@@ -666,30 +667,30 @@ int main(int argc,char *argv[])
               }
               if(s[i] == "PROTOCTL")
               {
-
+                 string buf;
                   //gives capabilities of the server, some irc clients dont send one for some reason (im looking at you two irssi and weechat)
-                  strcpy(sendBuff,string(":tinyirc 252 " + connections[z].username + " 0 :IRC Operators online" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 253 " + connections[z].username + " 0 :unknown connections" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 254 " + connections[z].username + " 0 :LUSERS is unimplmented" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 255 " + connections[z].username + " :LUSERS is unimplmented" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 265 " + connections[z].username + " 1 1 :LUSERS is unimplmented" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 266 " + connections[z].username + " 1 1 :LUSERS is unimplmented" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 375 " + connections[z].username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 372 " + connections[z].username + " :Padding call" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-                  strcpy(sendBuff,string(":tinyirc 376 " + connections[z].username + " :Ended" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  buf =":tinyirc 252 " + connections[z].username + " 0 :IRC Operators online" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc 253 " + connections[z].username + " 0 :unknown connections" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc 254 " + connections[z].username + " 0 :LUSERS is unimplmented" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc 255 " + connections[z].username + " :LUSERS is unimplmented" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc 265 " + connections[z].username + " 1 1 :LUSERS is unimplmented" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc 266 " + connections[z].username + " 1 1 :LUSERS is unimplmented" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc 375 " + connections[z].username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc 372 " + connections[z].username + " :Padding call" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
+                  buf =":tinyirc 376 " + connections[z].username + " :Ended" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
                   if(!connections[z].detectautisticclient)
                   {
-                  strcpy(sendBuff,string(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n").c_str());
-                  write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
+                  buf =":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n";
+                  write(connections[z].connfd,buf.c_str(),buf.size());
                   }
               }
           }
@@ -754,8 +755,9 @@ int main(int argc,char *argv[])
           {
           
           cout << "Hit random" << endl;
-          strcpy(sendBuff,string("PING :" + connections[z].username + "\r\n").c_str());
-          send(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff),MSG_NOSIGNAL);
+          string buf;
+          buf ="PING :" + connections[z].username + "\r\n";
+          send(connections[z].connfd,buf.c_str(),buf.size(),MSG_NOSIGNAL);
           connections[z].kicker = true;
           connections[z].dontkick = false;
           }
