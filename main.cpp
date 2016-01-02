@@ -258,6 +258,10 @@ int main(int argc,char *argv[])
                   for(int k =0; k < connections.size();k++)
                   {
                       string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
+                      if(sfisdk.size() > 225)
+                      {
+                          sfisdk = "FAGGOT" + to_string(rand() % 9000);
+                      }
                       boost::remove_erase_if(sfisdk, boost::is_any_of(".,#\n\r"));
                       if(sfisdk == connections[k].username)
                       {
@@ -273,7 +277,12 @@ int main(int argc,char *argv[])
                   }
                   else
                   {
-                  connections[z].username = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
+                  string sfisdk = sring(s[i+1]).substr(0,string(s[i+1]).find("\r"));;
+                  if(sfisdk.size() > 225)
+                  {
+                      sfisdk = "FAGGOT" + to_string(rand() % 9000);
+                  }
+                  connections[z].username = sfisdk;
                   boost::remove_erase_if(connections[z].username, boost::is_any_of(".,#\n\r"));
                   strcpy(sendBuff,string("PING :" + connections[z].username + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
@@ -286,6 +295,10 @@ int main(int argc,char *argv[])
                       for(int k =0; k < connections.size();k++)
                       {
                           string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
+                          if(sfisdk.size() > 225)
+                          {
+                          sfisdk = "FAGGOT" + to_string(rand() % 9000);
+                          }
                           boost::remove_erase_if(sfisdk, boost::is_any_of(".,#\n\r"));
                           if(sfisdk == connections[k].username)
                           {
