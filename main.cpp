@@ -23,24 +23,21 @@
 using namespace std;
 struct Channel
 {
+    string name;
+    string topic = "No topic set.";
+    vector<string> users;
+    int numusers = 0;
     Channel(string n)
     {
       name = n;
       boost::remove_erase_if(name,boost::is_any_of(" \n\r"));
     }
 
-    string name;
-    string topic = "No topic set.";
-    vector<string> users;
-    int numusers = 0;
+   
 };
 
 struct User
 {
-    User(int c){
-        connfd = c;
-
-    }
     bool userisauthed = false;
     int connfd;
     bool kicker = false;
@@ -49,6 +46,11 @@ struct User
     int rticks = 0;
     vector<string> channel;
     string username;
+    User(int c){
+        connfd = c;
+
+    }
+   
 };
 vector<User> connections;
 vector<Channel> channels;
@@ -80,16 +82,16 @@ int main(int argc,char *argv[])
     }
 
 
-
-
-
-  int numrv;
+  //Seed RNG
   srand(time(NULL));
+  //get socket
   listenfd = socket(AF_INET, SOCK_STREAM, 0);
   int g = 1;
 
   signal(SIGPIPE, SIG_IGN);
+  //ignore sigpipes
   setsockopt(listenfd,SOL_SOCKET,SO_REUSEADDR,&g,sizeof(int));
+  //force drop other applications on the same port
   //fcntl(listenfd, F_SETFL, O_NONBLOCK);
   printf("socket retrieve success\n");
 
@@ -101,25 +103,21 @@ int main(int argc,char *argv[])
   serv_addr.sin_port = htons(6667);
 
   bind(listenfd, (struct sockaddr*)&serv_addr,sizeof(serv_addr));
-
+  
   if(listen(listenfd, 10) == -1){
       printf("Failed to listen\n");
       return -1;
   }
-
+  //spawn second thread to accept connections, so main loop doesn't get blocked
   thread t(AcceptConnections);
   t.detach();
-
+  //again  because we spawned a thread
   signal(SIGPIPE, SIG_IGN);
   char data[1024];
   char data2[1024];
   int datarecv;
 
-  bool piperip = false;
-
-
-
-  while(1)
+  while(true)
     {
 
          for(int z = 0;z < connections.size();z++)
@@ -186,6 +184,7 @@ int main(int argc,char *argv[])
           for(int i =0;i < 1024;i++)
           {
           datarecv = recv(connections[z].connfd,data,1,MSG_DONTWAIT);
+          //hack to get past recv inconsistencies
           //cout << data[0] << endl;
           cout << datarecv << endl;
 
@@ -210,82 +209,28 @@ int main(int argc,char *argv[])
               break;
           }
           }
-          /*
-          if(piperip)
-          {
-              piperip = false;
-              for(int o = 0;o < connections[z].channel.size();o++)
-              {
-                  for(int l = 0; l < connections.size();l++)
-                  {
-                    for(int u =0;u < connections[l].channel.size();u++)
-                    {
-                        bool sentmsg = false;
-                        for(int as =0; as < connections[z].channel.size();as++)
-                        {
-                            if(connections[z].channel[as] == connections[l].channel[u])
-                            {
-                                string kd = string(":" + connections[z].username + " QUIT " + ":Quit" + "\r\n");
-
-                                write(connections[l].connfd,kd.c_str(),kd.size());
-                                sentmsg = true;
-                                break;
-                            }
-                        }
-                        if(sentmsg)
-                        {
-                            break;
-                        }
-                    }
-                  }
-              }
-              */
-          /*
-              for(int f =0;f < channels.size();f++)
-              {
-                  int channelindex = 0;
-                  for(int l = 0;l < channels.size();l++)
-                  {
-                      string p = channels[f].name;
-                      boost::remove_erase_if(p,boost::is_any_of(" \r\n"));
-                      if(channels[l].name == p)
-                      {
-                          channelindex = l;
-
-                      }
-
-                  }
-                  for(int o = 0;o < channels[channelindex].users.size();o++)
-                  {
-                    if(channels[channelindex].users[o] == connections[z].username)
-                    {
-                        channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
-                    }
-                  }
-              }
-              connections.erase(connections.begin() + z);
-              continue;
-          }
-          */
+          
 
           vector<string> s;
           s.erase(s.begin(),s.end());
           boost::algorithm::split(s,data2,boost::is_any_of(" \n"),boost::token_compress_on);
+          //split packet by whitespace
           for(int i =0;i < s.size();i++)
           {
               if(s[i] == "USER")
               {
-
+                 //stub incase anyone wants to implement authentication
               }
 
               if(s[i] == "PONG" && connections[z].userisauthed && connections[z].kicker)
               {
+                  //reset anti-drop
                   connections[z].dontkick = true;
                   connections[z].rticks = 0;
               }
               if(s[i] == "PONG" && !connections[z].userisauthed)
               {
-
+                  //oh nice, you accepted our PING, welcome to the party
                   strcpy(sendBuff,string(":tinyirc 001 " + connections[z].username + " :Hello!" + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
                   strcpy(sendBuff,string(":tinyirc 002 " + connections[z].username + " :This server is running TinyIRC pre-alpha!" + "\r\n").c_str());
@@ -306,7 +251,7 @@ int main(int argc,char *argv[])
               }
               if(s[i] == "NICK")
               {
-
+                  //if not authed, set username and PING, else set username
                   if(!connections[z].userisauthed)
                   {
                       bool killconn = false;
@@ -477,6 +422,8 @@ int main(int argc,char *argv[])
               }
               if(s[i] == "MODE")
               {
+                  //set user mode, required for some irc clients to think you're fully connected(im looking at you xchat)
+                  //+i means no messages from people outside the channel and that mode reflects how the server works
                   if(connections[z].channel.size() != 0)
                   {
                   strcpy(sendBuff,string(":tinyirc 324 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n").c_str());
@@ -634,7 +581,7 @@ int main(int argc,char *argv[])
               if(s[i] == "PROTOCTL")
               {
 
-
+                  //gives capabilities of the server, some irc clients dont send one for some reason (im looking at you two irssi and weechat)
                   strcpy(sendBuff,string(":tinyirc 252 " + connections[z].username + " 0 :IRC Operators online" + "\r\n").c_str());
                   write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
                   strcpy(sendBuff,string(":tinyirc 253 " + connections[z].username + " 0 :unknown connections" + "\r\n").c_str());
@@ -719,6 +666,7 @@ int main(int argc,char *argv[])
           }
           if(rand() % 480 == 42 && connections[z].userisauthed)
           {
+          
           cout << "Hit random" << endl;
           strcpy(sendBuff,string("PING :" + connections[z].username + "\r\n").c_str());
           send(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff),MSG_NOSIGNAL);
