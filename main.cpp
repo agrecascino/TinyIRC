@@ -38,7 +38,6 @@ struct User
 {
     bool userisauthed = false;
     int connfd;
-    bool kicker = false;
     bool dontkick = true;
     bool detectautisticclient = false;
     int rticks = 0;
@@ -266,7 +265,7 @@ int main(int argc,char *argv[])
                  //stub incase anyone wants to implement authentication
               }
 
-              if(s[i] == "PONG" && connections[z].userisauthed && connections[z].kicker)
+              if(s[i] == "PONG" && connections[z].userisauthed)
               {
                   //reset anti-drop
                   connections[z].dontkick = true;
@@ -695,7 +694,6 @@ int main(int argc,char *argv[])
           string buf;
           buf ="PING :" + connections[z].username + "\r\n";
           send(connections[z].connfd,buf.c_str(),buf.size(),MSG_NOSIGNAL);
-          connections[z].kicker = true;
           connections[z].dontkick = false;
           }
           cout << connections[z].username << endl;
