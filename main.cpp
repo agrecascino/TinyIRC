@@ -13,7 +13,6 @@
 #include <string.h>
 #include <time.h>
 #include <sstream>
-#include <iostream>
 #include <vector>
 #include <sys/types.h>
 #include <thread>
