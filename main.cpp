@@ -18,6 +18,8 @@
 #include <thread>
 using namespace std;
 string remove_erase_if(string c, string delim);
+void ControlServer();
+
 struct Channel
 {
     string name;
@@ -38,6 +40,7 @@ struct User
 {
     bool userisauthed = false;
     int connfd;
+    bool kickedbyop = false;
     bool kicker = false;
     bool dontkick = true;
     bool detectautisticclient = false;
@@ -173,6 +176,11 @@ int main(int argc,char *argv[])
   //spawn second thread to accept connections, so main loop doesn't get blocked
   thread t(AcceptConnections);
   t.detach();
+  if(eyboss != "y")
+  {
+  thread z(ControlServer);
+  z.detach();
+  }
   //again  because we spawned a thread
   signal(SIGPIPE, SIG_IGN);
   char data[1024];
@@ -199,7 +207,7 @@ int main(int argc,char *argv[])
                            {
                                if(connections[z].channel[as] == connections[l].channel[u])
                                {
-                                   string kd = string(":" + connections[z].username + " QUIT " + ":Socket killer." + "\r\n");
+                                   string kd = string(":" + connections[z].username + " QUIT " + (connections[z].kickedbyop ? string(":Kicked by OP") : string(":Socket killer.") ) + "\r\n");
 
                                    write(connections[l].connfd,kd.c_str(),kd.size());
                                    sentmsg = true;
@@ -248,7 +256,7 @@ int main(int argc,char *argv[])
           datarecv = recv(connections[z].connfd,data,1,MSG_DONTWAIT);
           //hack to get past recv inconsistencies
           //cout << data[0] << endl;
-          cout << datarecv << endl;
+          //cout << datarecv << endl;
 
           if(data[0] == NULL)
           {
@@ -271,7 +279,10 @@ int main(int argc,char *argv[])
               break;
           }
           }
-          
+          if(connections[z].kickedbyop)
+          {
+              goto killconn;
+          }
 
           vector<string> s;
           s.erase(s.begin(),s.end());
@@ -364,14 +375,10 @@ int main(int argc,char *argv[])
                       {
                           string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
                           if(sfisdk.size() > 225)
-                          {
                           sfisdk = "FAGGOT" + to_string(rand() % 9000);
-                          }
                           sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
                           if(sfisdk == connections[k].username)
-                          {
                               inuse = true;
-                          }
                       }
                       if(!inuse)
                       {
@@ -447,7 +454,6 @@ int main(int argc,char *argv[])
                               string ch = s[i+1];
                               ch = remove_erase_if(ch,":");
                               string kd = string(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
-
                               write(connections[p].connfd,kd.c_str(),kd.size());
                               }
                               }
@@ -455,46 +461,34 @@ int main(int argc,char *argv[])
 
                   }
 
-
-
-
               if(s[i] == "TOPIC")
               {
                  string msg = string(data2).substr(string(data2).find(":"));
                  for(int t = 0;t < channels.size();t++)
-                 {
                      if(channels[t].name == s[i+1])
                      {
                          msg = msg.substr(1 ,msg.find("\r"));
                          channels[t].topic = msg;
                      }
-                 }
                  for(int p = 0;p < connections.size(); p++)
                  {
                      for(int m = 0;m < connections[p].channel.size();m++)
                      {
                          if(connections[p].channel[m] == s[i+1])
                          {
-
                              string kd = string(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
-
                              write(connections[p].connfd,kd.c_str(),kd.size());
                          }
                      }
-
                  }
-
-
               }
               if(s[i] == "PRIVMSG")
               {
                    string msg = string(data2).substr(string(data2).find(":"),string(data2).find("\r"));
-
                   //send privmsg to all other users in channel
                   for(int p = 0;p < connections.size(); p++)
                   {
                       if(p != z)
-                      {
                       for(int m = 0;m < connections[p].channel.size();m++)
                       {
                           if(connections[p].channel[m] == s[i+1])
@@ -503,7 +497,6 @@ int main(int argc,char *argv[])
                               string buf = string(":" + connections[z].username + " PRIVMSG " + s[i+1] + " " + msg +"\r\n");
                               write(connections[p].connfd,buf.c_str(),buf.size());
                           }
-                      }
                       }
                   }
               }
@@ -535,9 +528,7 @@ int main(int argc,char *argv[])
                       p = s[i+1];
                       p = remove_erase_if(p," \r\n");
                       if(channels[l].name == p)
-                      {
                           channelindex = l;
-                      }
                   }
                   string buf = string(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n");
                   write(connections[z].connfd,buf.c_str(),buf.size());
@@ -571,9 +562,7 @@ int main(int argc,char *argv[])
                                 }
                             }
                             if(sentmsg)
-                            {
                                 break;
-                            }
                         }
                       }
                   }
@@ -592,21 +581,15 @@ int main(int argc,char *argv[])
 
                       }
                       for(int o = 0;o < channels[channelindex].users.size();o++)
-                      {
                         if(channels[channelindex].users[o] == connections[z].username)
-                        {
                             channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
-                        }
-                      }
                   }
                   break;
               }
               if(s[i] == "PART")
               {
                   vector<string> ctol;
-
                   split_string(string(s[i+1]),",",ctol);
-
                   for(int f =0;f < ctol.size();f++)
                   {
                       int channelindex = 0;
@@ -614,7 +597,6 @@ int main(int argc,char *argv[])
                       {
                           string p = ctol[f];
                           p = remove_erase_if(p," \r\n");
-                          //raise(SIGABRT);
                           if(channels[l].name == p)
                           {
                               channelindex = l;
@@ -625,10 +607,7 @@ int main(int argc,char *argv[])
                       for(int o = 0;o < channels[channelindex].users.size();o++)
                       {
                         if(channels[channelindex].users[o] == connections[z].username)
-                        {
-
                             channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
-                        }
                       }
                   }
                   for(int f =0;f < ctol.size();f++)
@@ -636,9 +615,7 @@ int main(int argc,char *argv[])
                       for(int q =0;q < connections[z].channel.size();q++)
                       {
                           if(connections[z].channel[q] == ctol[f])
-                          {
                               connections[z].channel.erase(connections[z].channel.begin() + q);
-                          }
                       }
                   }
                   for(int p = 0;p < connections.size(); p++)
@@ -648,17 +625,13 @@ int main(int argc,char *argv[])
                           for(int gh = 0;gh < ctol.size();gh++)
                           {
                               string kdr = string(":" + connections[z].username + " PART " + ctol[gh] + "\r\n");
-
                               write(connections[z].connfd,kdr.c_str(),kdr.size());
                           if(connections[p].channel[m] == ctol[gh])
                           {
-
                               string ch = s[i+1];
                               ch = remove_erase_if(ch,":");
                               string kd = string(":" + connections[z].username + " PART " + ctol[gh] + "\r\n");
-
                               write(connections[p].connfd,kd.c_str(),kd.size());
-
                            }
                           }
                       }
@@ -695,9 +668,7 @@ int main(int argc,char *argv[])
               }
           }
           if(!connections[z].dontkick)
-          {
               connections[z].rticks++;
-          }
           if(!connections[z].dontkick && connections[z].rticks == 192)
           {
               close(connections[z].connfd);
@@ -720,9 +691,7 @@ int main(int argc,char *argv[])
                             }
                         }
                         if(sentmsg)
-                        {
                             break;
-                        }
                     }
                   }
               }
@@ -743,9 +712,7 @@ int main(int argc,char *argv[])
                   for(int o = 0;o < channels[channelindex].users.size();o++)
                   {
                     if(channels[channelindex].users[o] == connections[z].username)
-                    {
                         channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
-                    }
                   }
               }
                connections.erase(connections.begin() + z);
@@ -753,24 +720,15 @@ int main(int argc,char *argv[])
           }
           if(rand() % 480 == 42 && connections[z].userisauthed)
           {
-          
-          cout << "Hit random" << endl;
           string buf;
           buf ="PING :" + connections[z].username + "\r\n";
           send(connections[z].connfd,buf.c_str(),buf.size(),MSG_NOSIGNAL);
           connections[z].kicker = true;
           connections[z].dontkick = false;
           }
-          cout << connections[z].username << endl;
-         // cout << "Proccessing connections" << endl;
          this_thread::sleep_for(chrono::milliseconds(50));
-          //write(connections[z].connfd,(void*)&sendBuff,strlen(sendBuff));
-
          }
       }
-
-
-
 
   return 0;
 }
@@ -778,17 +736,39 @@ void AcceptConnections()
 {
     while(1)
     {
-
-
     connections.push_back(User(accept(listenfd, (struct sockaddr*)NULL ,NULL))); // accept awaiting request
-    if(connfd != -1)
-    {
-        connc++;
+    connc++;
     }
+}
+void ControlServer()
+{
+    string action;
+    vector<string> cmd;
+    while(true)
+    {
+    cmd.erase(cmd.begin(),cmd.end());
+    getline(cin,action);
+    split_string(action," ",cmd);
+    for(int z = 0;z < cmd.size();z++)
+    {
+    if(cmd[z] == "list")
+    {
+        for(int i = 0;i < connections.size();i++)
+            cout << "User: " << connections[i].username << endl;
+    }
+    if(cmd[z] == "kick")
+    {
+        string nametest = string(cmd[z+1]).substr(0,string(cmd[z+1]).find("\n"));;
+        for(int o = 0;o < connections.size();o++)
+        {
 
-
-
-
-
+            if(connections[o].username == nametest)
+            {
+                connections[o].kickedbyop = true;
+                break;
+            }
+        }
+    }
+    }
     }
 }
