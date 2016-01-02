@@ -16,7 +16,6 @@
 #include <string.h>
 #include <time.h>
 #include <sstream>
-#include <iostream>
 #include <vector>
 #include <sys/types.h>
 #include <thread>
@@ -277,7 +276,7 @@ int main(int argc,char *argv[])
                   }
                   else
                   {
-                  string sfisdk = sring(s[i+1]).substr(0,string(s[i+1]).find("\r"));;
+                  string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));;
                   if(sfisdk.size() > 225)
                   {
                       sfisdk = "FAGGOT" + to_string(rand() % 9000);
