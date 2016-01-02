@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <string.h>
 #include <time.h>
+#include <sstream>
 #include <iostream>
 #include <vector>
 #include <sys/types.h>
@@ -56,8 +57,27 @@ char sendBuff[1025];
   int connc = 0;
   struct sockaddr_in serv_addr;
   void AcceptConnections();
-int main(void)
+int main(int argc,char *argv[])
 {
+    string eyboss;
+    cout << "Do you want to daemonize (y/N)?" << endl;
+    cin >> eyboss;
+    if(eyboss == "y")
+    {
+        pid_t pid;
+                   pid = fork();
+                   if(pid <0)
+                   {
+                       exit(EXIT_FAILURE);
+                   }
+                   if (pid > 0)
+                   {
+                       exit(EXIT_SUCCESS);
+                   }
+    fclose(stdin);
+    fclose(stdout);
+    fclose(stderr);
+    }
 
 
 
