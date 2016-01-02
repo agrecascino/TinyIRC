@@ -122,10 +122,9 @@ void split_string(string k , string delim, vector<string> &output)
 
 vector<User> connections;
 vector<Channel> channels;
-int listenfd = 0,connfd = 0;
-  int connc = 0;
-  struct sockaddr_in serv_addr;
-  void AcceptConnections();
+int listenfd = 0;
+struct sockaddr_in serv_addr;
+void AcceptConnections();
 int main(int argc,char *argv[])
 {
   //Seed RNG
@@ -714,17 +713,8 @@ void AcceptConnections()
 {
     while(1)
     {
-
-
-    connections.push_back(User(accept(listenfd, (struct sockaddr*)NULL ,NULL))); // accept awaiting request
-    if(connfd != -1)
-    {
-        connc++;
-    }
-
-
-
-
-
+        int connfd = accept(listenfd, nullptr, nullptr);
+        if(connfd != -1)
+            connections.push_back(User(connfd)); // accept awaiting request
     }
 }
