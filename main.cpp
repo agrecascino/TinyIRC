@@ -213,16 +213,16 @@ int main(int argc,char *argv[])
              }
          // strcpy(sendBuff,"NOTICE AUTH:*** Ayy lmao\r\n");
           //cout << sendBuff << endl;
-          memset(&data2,'0',1024);
-          memset(&data,'0',1024);
-          for(int i =0;i < 1024;i++)
+          memset(&data2, 0, sizeof data2);
+          memset(&data, 0, sizeof data);
+          for(int i =0;i < sizeof data2;i++)
           {
           datarecv = recv(connections[z].connfd,data,1,MSG_DONTWAIT);
           //hack to get past recv inconsistencies
           //cout << data[0] << endl;
           cout << datarecv << endl;
 
-          if(data[0] == NULL)
+          if(data[0] == 0)
           {
               break;
           }
