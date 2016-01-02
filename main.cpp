@@ -65,15 +65,15 @@ int main(int argc,char *argv[])
     if(eyboss == "y")
     {
         pid_t pid;
-                   pid = fork();
-                   if(pid <0)
-                   {
-                       exit(EXIT_FAILURE);
-                   }
-                   if (pid > 0)
-                   {
-                       exit(EXIT_SUCCESS);
-                   }
+        pid = fork();
+        if(pid < 0)
+        {
+            exit(EXIT_FAILURE);
+        }
+        if (pid > 0)
+        {
+            exit(EXIT_SUCCESS);
+        }
     fclose(stdin);
     fclose(stdout);
     fclose(stderr);
