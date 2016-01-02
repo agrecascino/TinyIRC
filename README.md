@@ -1,1 +1,1 @@
-An IRC server in ~500 lines
+An IRC server in less than 1000 lines
