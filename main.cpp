@@ -73,18 +73,11 @@ string remove_erase_if(string c, string delim)
     }
     return output;
 }
-string cleanup_chars_after_delim(string k , char delim)
+void delete_everything_after_delim(std::string& in, char delim)
 {
-    string output;
-    for(int i = 0;i < k.size();i++)
-    {
-        if(k[i] == delim)
-        {
-            break;
-        }
-        output += k[i];
-    }
-    return output;
+    size_t pos = in.find(delim);
+    if (pos != std::string::npos)
+        in.erase(in.begin() + pos, in.end());
 }
 
 void split_string(string k , string delim, vector<string> &output)
@@ -255,7 +248,7 @@ int main(int argc,char *argv[])
           vector<string> s;
           s.erase(s.begin(),s.end());
           string data2c = data2;
-          data2c = cleanup_chars_after_delim(data2c,'\0');
+          delete_everything_after_delim(data2c, '\0');
           split_string(data2c," \n",s);
           //split packet by whitespace
           for(int i =0;i < s.size();i++)
