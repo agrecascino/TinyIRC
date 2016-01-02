@@ -229,6 +229,10 @@ int main(int argc,char *argv[])
 
           if(datarecv == -1)
           {
+              if (errno != EAGAIN && errno != EWOULDBLOCK)
+              {
+                  goto killconn;
+              }
               break;
           }
 
