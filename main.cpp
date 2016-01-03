@@ -24,14 +24,7 @@ struct Channel
     string topic = "No topic set.";
     vector<string> users;
     int numusers = 0;
-    Channel(string n)
-    {
-      name = n;
-      name = remove_erase_if(name," \n\r");
-      //raise(SIGABRT);
-    }
-
-   
+    Channel(string name) : name(name) {}
 };
 
 struct User
@@ -43,10 +36,7 @@ struct User
     int rticks = 0;
     vector<string> channel;
     string username;
-    User(int c){
-        connfd = c;
-
-    }
+    User(int c) : connfd(c) {}
 
     ssize_t write(std::string data)
     {
