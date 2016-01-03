@@ -44,7 +44,6 @@ struct User
 {
     bool userisauthed = false;
     int connfd;
-    bool kickedbyop = false;
     bool dontkick = true;
     bool detectautisticclient = false;
     int rticks = 0;
@@ -56,6 +55,8 @@ struct User
     {
         return ::write(connfd, data.c_str(), data.size());
     }
+
+    void kill(string const &reason);
 };
 
 string remove_erase_if(string c, string delim)
@@ -145,42 +146,6 @@ int main(int argc,char *argv[])
 
          for(int z = 0;z < connections.size();z++)
           {
-             if(0)
-             {
-                 killconn:
-                 close(connections[z].connfd);
-                 for (User &observer : connections)
-                 {
-                     for (string const &observerchan : observer.channel)
-                     {
-                         bool sentmsg = false;
-                         for (string const &disconnecterchan : connections[z].channel)
-                         {
-                             if(disconnecterchan == observerchan)
-                             {
-                                 observer.write(":" + connections[z].username + " QUIT " + (connections[z].kickedbyop ? string(":Kicked by OP") : string(":Socket killer.") ) + "\r\n");
-                                 sentmsg = true;
-                                 break;
-                             }
-                         }
-                         if(sentmsg)
-                         {
-                             break;
-                         }
-                     }
-                 }
-                 for (string const &userchannel : connections[z].channel)
-                 {
-                     auto channeliter = std::find_if(channels.begin(), channels.end(),
-                         [&](Channel const& c) { return c.name == userchannel; }
-                     );
-                     // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
-                     channeliter->remove_user(connections[z]);
-                 }
-                  connections.erase(connections.begin() + z);
-                  continue;
-                 //hack to keep variables in scope
-             }
          // strcpy(sendBuff,"NOTICE AUTH:*** Ayy lmao\r\n");
           //cout << sendBuff << endl;
           memset(&data2, 0, sizeof data2);
@@ -196,14 +161,16 @@ int main(int argc,char *argv[])
           {
               if (errno != EAGAIN && errno != EWOULDBLOCK)
               {
-                  goto killconn;
+                  connections[z--].kill("Connection error");
+                  continue;
               }
               break;
           }
 
           if(datarecv == 0)
           {
-              goto killconn;
+              connections[z--].kill("Connection error");
+              continue;
           }
 
           data2[i] = data[0];
@@ -211,10 +178,6 @@ int main(int argc,char *argv[])
           {
               break;
           }
-          }
-          if(connections[z].kickedbyop)
-          {
-              goto killconn;
           }
 
           vector<string> s;
@@ -271,9 +234,8 @@ int main(int argc,char *argv[])
                   if(killconn)
                   {
                       //CS major meme killconn == true
-                      connections[z].write("NOTICE :*** Name already in use... Killing connection.\r\n");
-                      connections[z].dontkick = false;
-                      connections[z].rticks = 192;
+                      connections[z--].kill("Nick already in use");
+                      continue;
                   }
                   else
                   {
@@ -428,32 +390,8 @@ int main(int argc,char *argv[])
               }
               if(s[i] == "QUIT")
               {
-                  connections[z].dontkick = false;
-                  for (User &observer : connections)
-                    for (string const &observerchan : observer.channel)
-                    {
-                        bool sentmsg = false;
-                        for (string const &quitterchan : connections[z].channel)
-                            if(quitterchan == observerchan)
-                            {
-                                string kd = string(":" + connections[z].username + " QUIT " + ":Quit" + "\r\n");
-
-                                send(observer.connfd,kd.c_str(),kd.size(), MSG_NOSIGNAL);
-                                sentmsg = true;
-                                break;
-                            }
-                        if(sentmsg) break;
-                    }
-                  for (string const &userchannel : connections[z].channel)
-                  {
-                      auto channeliter = std::find_if(channels.begin(), channels.end(),
-                          [&](Channel const& c) { return c.name == userchannel; }
-                      );
-                      // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
-                      channeliter->remove_user(connections[z]);
-                  }
-                  connections.erase(connections.begin() + z);
-                  break;
+                  connections[z--].kill("Quit");
+                  continue;
               }
               if(s[i] == "PART")
               {
@@ -495,26 +433,7 @@ int main(int argc,char *argv[])
               connections[z].rticks++;
           if(!connections[z].dontkick && connections[z].rticks == 192)
           {
-              close(connections[z].connfd);
-              for (User &observer : connections)
-              {
-                for (string const &observerchan : observer.channel)
-                {
-                    bool sentmsg = false;
-                    for (string const &kickedchan : connections[z].channel)
-                        if(kickedchan == observerchan)
-                        {
-                            observer.write(":" + connections[z].username + " QUIT " + ":Ping timed out" + "\r\n");
-                            sentmsg = true;
-                            break;
-                        }
-                    if(sentmsg)
-                        break;
-                }
-              }
-              for (Channel &channel : channels)
-                  channel.remove_user(connections[z]);
-              connections.erase(connections.begin() + z);
+              connections[z--].kill("Ping timed out");
               continue;
           }
           if(rand() % 480 == 42 && connections[z].userisauthed)
@@ -591,11 +510,45 @@ void ControlServer()
 
             if(connections[o].username == nametest)
             {
-                connections[o].kickedbyop = true;
+                connections[o].kill("Kicked by OP");
                 break;
             }
         }
     }
     }
     }
+}
+
+void User::kill(string const &reason)
+{
+    string const quitbroadcast = ":" + username + " QUIT :" + reason + "\r\n";
+    write(quitbroadcast);
+    close(connfd);
+    for (User &observer : connections)
+    {
+        for (string const &observerchan : observer.channel)
+        {
+            bool sentmsg = false;
+            for (string const &disconnecterchan : channel)
+                if(disconnecterchan == observerchan)
+                {
+                    observer.write(quitbroadcast);
+                    sentmsg = true;
+                    break;
+                }
+            if(sentmsg)
+                break;
+        }
+    }
+    for (string const &userchannel : channel)
+    {
+        auto channeliter = std::find_if(channels.begin(), channels.end(),
+                [&](Channel const& c) { return c.name == userchannel; }
+                );
+        // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
+        channeliter->remove_user(*this);
+    }
+    connections.erase(std::remove_if(connections.begin(), connections.end(),
+            [&](User const &x) { return &x == this; }
+        ), connections.end());
 }
