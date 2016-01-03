@@ -58,6 +58,7 @@ struct User
     }
 
     void kill(string const &reason);
+    void broadcast(string const &message);
 };
 
 string remove_erase_if(string c, string delim)
@@ -256,8 +257,8 @@ int main(int argc,char *argv[])
                           connections[z].write(":tinyirc " "NOTICE :*** Name already in use..." "\r\n");
                       else
                       {
+                          connections[z].broadcast(":" + connections[z].username + " NICK " + sfisdk + "\r\n");
                           connections[z].username = sfisdk;
-                          connections[z].write(":" + connections[z].username + " NICK " + sfisdk + "\r\n");
                       }
                   }
                   break;
@@ -492,24 +493,8 @@ void ControlServer()
 void User::kill(string const &reason)
 {
     string const quitbroadcast = ":" + username + " QUIT :" + reason + "\r\n";
-    write(quitbroadcast);
+    broadcast(quitbroadcast);
     close(connfd);
-    for (User &observer : connections)
-    {
-        for (string const &observerchan : observer.channel)
-        {
-            bool sentmsg = false;
-            for (string const &disconnecterchan : channel)
-                if(disconnecterchan == observerchan)
-                {
-                    observer.write(quitbroadcast);
-                    sentmsg = true;
-                    break;
-                }
-            if(sentmsg)
-                break;
-        }
-    }
     for (string const &userchannel : channel)
     {
         auto channeliter = std::find_if(channels.begin(), channels.end(),
@@ -529,4 +514,20 @@ void Channel::broadcast(string const &message)
     for (User &connection : connections)
         if (connection.channel.find(name) != connection.channel.end())
             connection.write(message);
+}
+
+void User::broadcast(string const &message)
+{
+    // Broadcast a message to everyone interested in this user
+    set<User*> users;
+    for (User &observer : connections)
+        for (string const &mychan : channel)
+            if (observer.channel.find(mychan) != observer.channel.end())
+            {
+                users.insert(&observer);
+                break;
+            }
+
+    for (User *user : users)
+        user->write(message);
 }
