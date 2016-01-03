@@ -500,11 +500,12 @@ int main(int argc,char *argv[])
                   //set user mode, required for some irc clients to think you're fully connected(im looking at you xchat)
                   //+i means no messages from people outside the channel and that mode reflects how the server works
                   string buf;
+                  string channel = remove_erase_if(s[i+1],"\n\r ");
                   if(connections[z].channel.size() != 0)
                   {
-                  buf =":tinyirc 324 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n";
+                  buf =":tinyirc 324 " + connections[z].username + " " + channel + " +n" + "\r\n";
                   write(connections[z].connfd,buf.c_str(),buf.size());
-                  buf =":tinyirc 329 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " 0 0" + "\r\n";
+                  buf =":tinyirc 329 " + connections[z].username + " " + channel + " 0 0" + "\r\n";
                   write(connections[z].connfd,buf.c_str(),buf.size());
                   }
                   else
