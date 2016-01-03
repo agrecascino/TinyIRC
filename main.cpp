@@ -73,42 +73,17 @@ string remove_erase_if(string c, string delim)
     }
     return output;
 }
-void delete_everything_after_delim(std::string& in, char delim)
-{
-    size_t pos = in.find(delim);
-    if (pos != std::string::npos)
-        in.erase(in.begin() + pos, in.end());
-}
 
-void split_string(string k , string delim, vector<string> &output)
+void split_string(string const &k, string const &delim, vector<string> &output)
 {
-    int getdelimcount = 0;
-    for(unsigned int i =0;i < k.size();i++)
+    // Due to the use of strpbrk here, this will stop copying at a null char. This is in fact desirable.
+    char const *last_ptr = k.c_str(), *next_ptr;
+    while ((next_ptr = strpbrk(last_ptr, delim.c_str())) != nullptr)
     {
-        for(int o = 0;o < delim.size();o++)
-        {
-        if(k[i] == delim[o])
-        {
-            getdelimcount++;
-        }
-        }
+        output.emplace_back(last_ptr, next_ptr - last_ptr);
+        last_ptr = next_ptr + 1;
     }
-    for(int z = 0;z < k.size();z++ )
-    {
-        for(int i = 1;i < delim.size();i++)
-        {
-            if(k[z] == delim[i])
-            {
-                k[z] = delim[0];
-            }
-        }
-    }
-    for(int i =0;i <= getdelimcount;i++)
-    {
-       int delimiter = k.find(delim[0]);
-          output.push_back(k.substr(0, delimiter));
-          k = k.substr(delimiter + 1, k.size());
-    }
+    output.emplace_back(last_ptr);
 }
 
 
@@ -252,7 +227,6 @@ int main(int argc,char *argv[])
           vector<string> s;
           s.erase(s.begin(),s.end());
           string data2c = data2;
-          delete_everything_after_delim(data2c, '\0');
           split_string(data2c," \n",s);
           //split packet by whitespace
           for(int i =0;i < s.size();i++)
