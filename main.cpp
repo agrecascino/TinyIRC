@@ -229,19 +229,19 @@ int main(int argc,char *argv[])
               if(s[i] == "NICK")
               {
                   string new_nick = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
-                  new_nick = remove_erase_if(sfisdk, ".,#\n\r");
+                  new_nick = remove_erase_if(new_nick, ".,#\n\r");
                   if(new_nick.size() > 225 || new_nick.size() == 0)
                       new_nick = "FAGGOT" + to_string(rand() % 9000);
 
                   bool inuse = false;
                   for(int k =0; k < connections.size();k++)
-                      if(sfisdk == connections[k].username)
+                      if(new_nick == connections[k].username)
                           inuse = true;
 
                   //if not authed, set username and PING, else set username
                   if(!connections[z].userisauthed)
                   {
-                      connections[z].username = sfisdk;
+                      connections[z].username = new_nick;
                       if(inuse)
                       {
                           connections[z--].kill("Nick already in use");
@@ -255,8 +255,8 @@ int main(int argc,char *argv[])
                           connections[z].write(":tinyirc " "NOTICE :*** Name already in use..." "\r\n");
                       else
                       {
-                          connections[z].broadcast(":" + connections[z].username + " NICK " + sfisdk + "\r\n");
-                          connections[z].username = sfisdk;
+                          connections[z].broadcast(":" + connections[z].username + " NICK " + new_nick + "\r\n");
+                          connections[z].username = new_nick;
                       }
                   }
                   break;
