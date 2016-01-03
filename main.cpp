@@ -475,32 +475,32 @@ void ControlServer()
     vector<string> cmd;
     while(true)
     {
-    cmd.erase(cmd.begin(),cmd.end());
-    getline(cin,action);
-    split_string(action," ",cmd);
-    for(int z = 0;z < cmd.size();z++)
-    {
-    if(cmd[z] == "list")
-    {
-        mutex_guard lock(connections_mutex);
-        for(int i = 0;i < connections.size();i++)
-            cout << "User: " << connections[i].username << endl;
-    }
-    if(cmd[z] == "kick")
-    {
-        mutex_guard lock(connections_mutex);
-        string nametest = string(cmd[z+1]).substr(0,string(cmd[z+1]).find("\n"));;
-        for(int o = 0;o < connections.size();o++)
+        cmd.erase(cmd.begin(),cmd.end());
+        getline(cin,action);
+        split_string(action," ",cmd);
+        for(int z = 0;z < cmd.size();z++)
         {
-
-            if(connections[o].username == nametest)
+            if(cmd[z] == "list")
             {
-                connections[o].kill("Kicked by OP");
-                break;
+                mutex_guard lock(connections_mutex);
+                for(int i = 0;i < connections.size();i++)
+                    cout << "User: " << connections[i].username << endl;
+            }
+            if(cmd[z] == "kick")
+            {
+                mutex_guard lock(connections_mutex);
+                string nametest = string(cmd[z+1]).substr(0,string(cmd[z+1]).find("\n"));;
+                for(int o = 0;o < connections.size();o++)
+                {
+
+                    if(connections[o].username == nametest)
+                    {
+                        connections[o].kill("Kicked by OP");
+                        break;
+                    }
+                }
             }
         }
-    }
-    }
     }
 }
 
