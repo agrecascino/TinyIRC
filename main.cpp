@@ -195,7 +195,8 @@ int main(int argc,char *argv[])
               }
               if(s[i] == "PING")
               {
-                  connections[z].write("PONG" + s[i+1] + "\r\n");
+                  string cheese = remove_erase_if(s[i+1],"\r\n ");
+                  connections[z].write(":tinyirc PONG " + cheese + "\r\n");
                   break;
               }
 
