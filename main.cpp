@@ -314,15 +314,31 @@ int main(int argc,char *argv[])
               }
               if(s[i] == "PRIVMSG")
               {
-                   string msg = string(data2).substr(string(data2).find(":"),string(data2).find("\r"));
+                  string msg = string(data2).substr(string(data2).find(":"));
+                  msg = remove_erase_if(msg, "\r");
                   //send privmsg to all other users in channel
                   // TODO: user-to-user private messaging
                   // TODO: warning if channel/user doesn't exist
-                  string buf(":" + connections[z].username + " PRIVMSG " + s[i+1] + " " + msg +"\r\n");
-                  for (User &observer : connections)
-                      if(&observer != &connections[z])
-                          if (observer.channel.find(s[i+1]) != observer.channel.end())
-                              observer.write(buf);
+                  string recip = s[i+1];
+                  if (recip.size() == 0) break;
+
+                  string buf(":" + connections[z].username + " PRIVMSG " + recip + " " + msg +"\r\n");
+                  if (recip[0] == '#')
+                  {
+                      for (User &observer : connections)
+                          if(&observer != &connections[z])
+                              if (observer.channel.find(s[i+1]) != observer.channel.end())
+                                  observer.write(buf);
+                  }
+                  else
+                  {
+                      for (User &user : connections)
+                          if (user.username == recip)
+                          {
+                              user.write(buf);
+                              break;
+                          }
+                  }
                   break;
               }
               if(s[i] == "MODE")
