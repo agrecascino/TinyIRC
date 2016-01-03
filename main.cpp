@@ -2,6 +2,12 @@
 #include <mutex>
 #include <set>
 #include <algorithm>
+#include <cstring>
+#include <chrono>
+#include <sstream>
+#include <vector>
+#include <thread>
+extern "C" {
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -9,16 +15,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <cstring>
-#include <chrono>
 #include <signal.h>
 #include <errno.h>
 #include <string.h>
 #include <time.h>
-#include <sstream>
-#include <vector>
 #include <sys/types.h>
-#include <thread>
+#include <err.h>
+}
 using namespace std;
 string remove_erase_if(string c, string delim);
 
@@ -101,6 +104,8 @@ int main(int argc,char *argv[])
   srand(time(NULL));
   //get socket
   listenfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (listenfd == -1)
+      err(1, "socket");
   int g = 1;
 
   signal(SIGPIPE, SIG_IGN);
@@ -108,7 +113,6 @@ int main(int argc,char *argv[])
   setsockopt(listenfd,SOL_SOCKET,SO_REUSEADDR,&g,sizeof(int));
   //force drop other applications on the same port
   //fcntl(listenfd, F_SETFL, O_NONBLOCK);
-  printf("socket retrieve success\n");
 
   memset(&serv_addr, '0', sizeof(serv_addr));
 
@@ -116,7 +120,8 @@ int main(int argc,char *argv[])
   serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   serv_addr.sin_port = htons(6667);
 
-  bind(listenfd, (struct sockaddr*)&serv_addr,sizeof(serv_addr));
+  if (bind(listenfd, (struct sockaddr*)&serv_addr,sizeof(serv_addr)) == -1)
+      err(1, "bind to port %d", ntohs(serv_addr.sin_port));
   
   if(listen(listenfd, 10) == -1){
       printf("Failed to listen\n");
