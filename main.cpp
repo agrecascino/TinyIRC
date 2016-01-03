@@ -488,6 +488,7 @@ void ControlServer()
             if (cmd.size() < 2)
             {
                 cout << "Need a username to kick" << endl;
+                continue;
             }
             mutex_guard lock(connections_mutex);
             string name = cmd[1];
