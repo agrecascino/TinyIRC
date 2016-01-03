@@ -1,6 +1,7 @@
 #include <iostream>
 #include <mutex>
 #include <set>
+#include <map>
 #include <algorithm>
 #include <cstring>
 #include <chrono>
@@ -130,7 +131,7 @@ void split_string(string const &k, string const &delim, vector<string> &output)
 typedef lock_guard<mutex> mutex_guard;
 mutex connections_mutex; // XXX SLOW HACK to stop the server dying randomly
 vector<User> connections;
-vector<Channel> channels;
+map<string, Channel> channels; // channel name → channel
 int listenfd = 0;
 struct sockaddr_in serv_addr;
 void AcceptConnections();
@@ -247,12 +248,11 @@ int main(int argc,char *argv[])
                             {
                                 // Update nick in all channels
                                 for (string const &channelname : user.channel)
-                                    for (Channel &channel : channels)
-                                        if (channel.name == channelname)
-                                        {
-                                            channel.users.erase(user.username);
-                                            channel.users.insert(new_nick);
-                                        }
+                                {
+                                    Channel &channel = channels.at(channelname);
+                                    channel.users.erase(user.username);
+                                    channel.users.insert(new_nick);
+                                }
                                 user.broadcast(":" + user.username + " NICK " + new_nick + "\r\n");
                                 user.username = new_nick;
                             }
@@ -265,28 +265,15 @@ int main(int argc,char *argv[])
                         channame = remove_erase_if(channame,":,. \r");
                         if(channame [0] != '#')
                             channame.insert(0,"#");
+
+                        Channel &channel = channels.emplace(piecewise_construct, forward_as_tuple(channame), forward_as_tuple(channame)).first->second;
                         user.channel.insert(channame);
-                        bool channelexists = false;
-                        int channelindex = 0;
-                        for(int l = 0;l < channels.size();l++)
-                        {
-                            if(channels[l].name == channame)
-                            {
-                                channelindex = l;
-                                channelexists = true;
-                            }
-                        }
-                        if(!channelexists)
-                        {
-                            channels.push_back(Channel(channame));
-                            channelindex = channels.size() - 1;
-                        }
-                        channels[channelindex].users.insert(user.username);
-                        channels[channelindex].broadcast(":" + user.username + " JOIN " + channame + "\r\n");
+                        channel.users.insert(user.username);
+                        channel.broadcast(":" + user.username + " JOIN " + channame + "\r\n");
                         user.write(":tinyirc MODE :" + channame + " +n" + "\r\n");
-                        user.write(":tinyirc 332 " + user.username + " " + channame +  " :" + channels[channelindex].topic + "\r\n");
+                        user.write(":tinyirc 332 " + user.username + " " + channame +  " :" + channel.topic + "\r\n");
                         string msgf(":tinyirc 353 " + user.username + " = " + channame + " :");
-                        for(string const &chanuser : channels[channelindex].users)
+                        for(string const &chanuser : channel.users)
                         {
                             msgf += chanuser;
                             msgf += " ";
@@ -298,20 +285,24 @@ int main(int argc,char *argv[])
                     }
                     else if(command[0] == "TOPIC")
                     {
-                        for(int t = 0;t < channels.size();t++)
-                            if(channels[t].name == command[1])
+                        auto channel_iter = channels.find(command[1]);
+                        if (channel_iter == channels.end())
+                        {
+                            user.write(":tinyirc 403 " + user.username + " " + command[1] + " :No such channel\r\n");
+                        }
+                        else
+                        {
+                            Channel &channel = channel_iter->second;
+                            if (command.size() > 2)
                             {
-                                if (command.size() > 2)
-                                {
-                                    channels[t].topic = command[2];
-                                    channels[t].broadcast(":" + user.username + " TOPIC " + command[1] + " :" + command[2] + "\r\n");
-                                }
-                                else
-                                {
-                                    user.write(":tinyirc 332 " + user.username + " " + command[1] + " :" + channels[t].topic + "\r\n");
-                                }
-                                break;
+                                channel.topic = command[2];
+                                channel.broadcast(":" + user.username + " TOPIC " + command[1] + " :" + command[2] + "\r\n");
                             }
+                            else
+                            {
+                                user.write(":tinyirc 332 " + user.username + " " + command[1] + " :" + channel.topic + "\r\n");
+                            }
+                        }
                     }
                     else if(command[0] == "PRIVMSG")
                     {
@@ -357,14 +348,11 @@ int main(int argc,char *argv[])
                     }
                     else if(command[0] == "WHO")
                     {
-                        int channelindex = 0;
-                        string p = command[1];
-                        for(int l = 0;l < channels.size();l++)
-                            if(channels[l].name == p)
-                                channelindex = l;
-                        for(string const &chanuser : channels[channelindex].users)
-                            user.write(":tinyirc 352 " + user.username + " " + p + " tinyirc " + chanuser + "\r\n");
-                        user.write(":tinyirc 315 " + user.username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n");
+                        auto const channel_iter = channels.find(command[1]);
+                        if (channel_iter != channels.end())
+                            for(string const &chanuser : channel_iter->second.users)
+                                user.write(":tinyirc 352 " + user.username + " " + command[1] + " tinyirc " + chanuser + "\r\n");
+                        user.write(":tinyirc 315 " + user.username + " " + command[1] + " :End of /WHO list.\r\n");
                     }
                     else if(command[0] == "QUIT")
                     {
@@ -378,15 +366,13 @@ int main(int argc,char *argv[])
 
                         for (string &chantopart : ctol)
                         {
-                            auto channeliter = std::find_if(channels.begin(), channels.end(),
-                                    [&](Channel const& c) { return c.name == chantopart; }
-                                    );
-
+                            auto channeliter = channels.find(chantopart);
                             if (channeliter == channels.end())
                                 continue; // Don't part a channel that doesn't exist
 
-                            channeliter->notify_part(user, reason);
-                            channeliter->remove_user(user);
+                            Channel &channel = channeliter->second;
+                            channel.notify_part(user, reason);
+                            channel.remove_user(user);
                         }
                     }
                     else if(command[0] == "PROTOCTL")
@@ -517,13 +503,8 @@ void User::kill(string const &reason)
     broadcast(quitbroadcast);
     close(connfd);
     for (string const &userchannel : channel)
-    {
-        auto channeliter = std::find_if(channels.begin(), channels.end(),
-                [&](Channel const& c) { return c.name == userchannel; }
-                );
         // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
-        channeliter->remove_user(*this);
-    }
+        channels.at(userchannel).remove_user(*this);
     dead = true;
 }
 
