@@ -48,7 +48,7 @@ struct User
     bool detectautisticclient = false;
     int rticks = 0;
     vector<string> channel;
-    string username;
+    string username = "<connecting>";
     User(int c) : connfd(c) {}
 
     ssize_t write(std::string data)
