@@ -61,6 +61,7 @@ struct User
 
     void kill(string const &reason);
     void broadcast(string const &message);
+    string try_read();
 };
 
 string remove_erase_if(string c, string delim)
@@ -169,9 +170,6 @@ int main(int argc,char *argv[])
     z.detach();
     //again  because we spawned a thread
     signal(SIGPIPE, SIG_IGN);
-    char data[1024];
-    char data2[1024];
-    int datarecv;
 
     while(true)
     {
@@ -183,39 +181,9 @@ int main(int argc,char *argv[])
 
             for (User &user : connections)
             {
-                memset(&data2, 0, sizeof data2);
-                memset(&data, 0, sizeof data);
-                for(int i =0;i < sizeof data2;i++)
-                {
-                    datarecv = recv(user.connfd,data,1,MSG_DONTWAIT);
-                    //hack to get past recv inconsistencies
-                    //cout << data[0] << endl;
-                    //cout << datarecv << endl;
-
-                    if(datarecv == -1)
-                    {
-                        if (errno != EAGAIN && errno != EWOULDBLOCK)
-                        {
-                            user.kill("Connection error");
-                        }
-                        break;
-                    }
-
-                    if(datarecv == 0)
-                    {
-                        user.kill("Connection error");
-                        break;
-                    }
-
-                    data2[i] = data[0];
-                    if(data[0] == '\n')
-                    {
-                        break;
-                    }
-                }
+                string command_str = user.try_read();
                 if (user.dead) continue;
 
-                string command_str(data2);
                 chop_newline_off(command_str);
                 vector<string> command = parse_irc_command(command_str);
                 if (!command.empty())
@@ -575,4 +543,34 @@ void User::broadcast(string const &message)
 
     for (User *user : users)
         user->write(message);
+}
+
+string User::try_read()
+{
+    string line;
+    char data = 0; // Reading one at a time, hack!
+    while (data != '\n')
+    {
+        ssize_t datarecv = recv(connfd, &data, 1, MSG_DONTWAIT);
+        if(datarecv == -1)
+        {
+            if (errno != EAGAIN && errno != EWOULDBLOCK)
+                kill("Connection error");
+            break;
+        }
+
+        if(datarecv == 0)
+        {
+            kill("Connection error");
+            break;
+        }
+
+        line += data;
+        if (line.size() > 2048)
+        {
+            kill("Line too long");
+            break;
+        }
+    }
+    return line;
 }
