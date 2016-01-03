@@ -483,7 +483,7 @@ void ControlServer()
                 for(int i = 0;i < connections.size();i++)
                     cout << "User: " << connections[i].username << endl;
             }
-            if(cmd[z] == "kick")
+            else if(cmd[z] == "kick")
             {
                 mutex_guard lock(connections_mutex);
                 string nametest = string(cmd[z+1]).substr(0,string(cmd[z+1]).find("\n"));;
@@ -495,6 +495,16 @@ void ControlServer()
                         connections[o].kill("Kicked by OP");
                         break;
                     }
+                }
+            }
+            else if (cmd[z] == "say")
+            {
+                size_t space_pos = action.find(' ');
+                if (space_pos != string::npos)
+                {
+                    action.erase(0, space_pos + 1);
+                    for (User &user : connections)
+                        user.write(":tinyirc NOTICE " + user.username + " :" + action + "\r\n");
                 }
             }
         }
