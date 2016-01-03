@@ -26,7 +26,6 @@ struct Channel
     string const name;
     string topic = "No topic set.";
     vector<string> users;
-    int numusers = 0;
 
     Channel(string name) : name(name) {}
 
@@ -348,7 +347,6 @@ int main(int argc,char *argv[])
                   msgf += "\r\n";
                   connections[z].write(msgf);
                   connections[z].write(":tinyirc 366 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " :Sucessfully joined channel." +"\r\n");
-                  channels[channelindex].numusers++;
                   for(int p = 0;p < connections.size(); p++)
                   {
                       for(int m = 0;m < connections[p].channel.size();m++)
@@ -596,9 +594,6 @@ void Channel::remove_user(User& user)
 {
     // Does NOT notify any clients that the user is removed!
     // Use notify_part for that (or send out quits)
-    // TODO check that the user is actually in the channel first
-    numusers--;
-
     std::remove_if(users.begin(), users.end(),
         [&](string const& u) { return u == user.username; }
     );
