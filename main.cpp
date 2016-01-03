@@ -83,6 +83,44 @@ string remove_erase_if(string c, string delim)
     return output;
 }
 
+void chop_newline_off(string &in)
+{
+    auto last = in.end() - 1;
+    if (*last != '\n') return;
+    auto secondlast = last - 1;
+    if (*secondlast == '\r')
+        in.erase(secondlast, in.end());
+    else
+        in.erase(last, in.end());
+}
+
+vector<string> parse_irc_command(string const &command)
+{
+    vector<string> out;
+    size_t pos = 0, end = command.size();
+
+    while (pos < end)
+    {
+        while (pos < end && command[pos] == ' ') pos++; // Skip spaces
+        if (pos >= end) break;
+        if (command[pos] == ':')
+        {
+            if (out.empty()) // Origin prefix, ignore
+                while (pos < end && command[pos] != ' ') pos++;
+            else // Long parameter
+                out.emplace_back(command.substr(pos + 1));
+            break;
+        }
+        else
+        {
+            size_t copyfrom = pos;
+            while (pos < end && command[pos] != ' ') pos++;
+            out.emplace_back(command.substr(copyfrom, pos - copyfrom));
+        }
+    }
+    return out;
+}
+
 void split_string(string const &k, string const &delim, vector<string> &output)
 {
     // Due to the use of strpbrk here, this will stop copying at a null char. This is in fact desirable.
@@ -181,33 +219,26 @@ int main(int argc,char *argv[])
           }
           }
 
-          vector<string> s;
-          s.erase(s.begin(),s.end());
-          string data2c = data2;
-          split_string(data2c," \n",s);
-          //split packet by whitespace
-          for(int i =0;i < s.size();i++)
+          string command_str(data2);
+          chop_newline_off(command_str);
+          vector<string> command = parse_irc_command(command_str);
+          if (!command.empty())
           {
-              if(s[i] == "USER")
+              if(command[0] == "USER")
               {
                  //stub incase anyone wants to implement authentication
-                 break;
               }
-              if(s[i] == "PING")
+              else if(command[0] == "PING")
               {
-                  string cheese = remove_erase_if(s[i+1],"\r\n ");
-                  connections[z].write(":tinyirc PONG " + cheese + "\r\n");
-                  break;
+                  connections[z].write(":tinyirc PONG :" + command[1] + "\r\n");
               }
-
-              if(s[i] == "PONG" && connections[z].status != User::ConnectStatus::NICKSET)
+              else if(command[0] == "PONG" && connections[z].status != User::ConnectStatus::NICKSET)
               {
                   //reset anti-drop
                   connections[z].dontkick = true;
                   connections[z].rticks = 0;
-                  break;
               }
-              if(s[i] == "PONG" && connections[z].status == User::ConnectStatus::NICKSET)
+              else if(command[0] == "PONG" && connections[z].status == User::ConnectStatus::NICKSET)
               {
                   //oh nice, you accepted our PING, welcome to the party
                   connections[z].write(":tinyirc 001 " + connections[z].username + " :Hello!" + "\r\n");
@@ -220,12 +251,10 @@ int main(int argc,char *argv[])
                   connections[z].status = User::ConnectStatus::READY;
 
                   connections[z].dontkick = true;
-                  break;
               }
-              if(s[i] == "NICK")
+              else if(command[0] == "NICK")
               {
-                  string new_nick = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
-                  new_nick = remove_erase_if(new_nick, ".,#\n\r");
+                  string new_nick = remove_erase_if(command[1], ".,#\r");
                   if(new_nick.size() > 225 || new_nick.size() == 0)
                       new_nick = "FAGGOT" + to_string(rand() % 9000);
 
@@ -256,13 +285,12 @@ int main(int argc,char *argv[])
                           connections[z].username = new_nick;
                       }
                   }
-                  break;
               }
-              if(s[i] == "JOIN")
+              else if(command[0] == "JOIN")
               {
-                  string channame = s[i+1];
+                  string channame = command[1];
                   // TODO handle comma separated chan joins?
-                  channame = remove_erase_if(channame,":,. \r\n");
+                  channame = remove_erase_if(channame,":,. \r");
                   if(channame [0] != '#')
                      channame.insert(0,"#");
                   connections[z].channel.insert(channame);
@@ -281,7 +309,6 @@ int main(int argc,char *argv[])
                       channels.push_back(Channel(channame));
                       channelindex = channels.size() - 1;
                   }
-                  string buf;
                   channels[channelindex].users.insert(connections[z].username);
                   channels[channelindex].broadcast(":" + connections[z].username + " JOIN " + channame + "\r\n");
                   connections[z].write(":tinyirc MODE :" + channame + " +n" + "\r\n");
@@ -295,37 +322,31 @@ int main(int argc,char *argv[])
                   msgf += "\r\n";
                   connections[z].write(msgf);
                   connections[z].write(":tinyirc 366 " + connections[z].username + " " + channame + " :Sucessfully joined channel." +"\r\n");
-                  break;
               }
-
-              if(s[i] == "TOPIC")
+              else if(command[0] == "TOPIC")
               {
-                 string msg = string(data2).substr(string(data2).find(":"));
                  for(int t = 0;t < channels.size();t++)
-                     if(channels[t].name == s[i+1])
+                     if(channels[t].name == command[1])
                      {
-                         msg = msg.substr(1, msg.find("\r") - 1);
-                         channels[t].topic = msg;
-                         channels[t].broadcast(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
+                         channels[t].topic = command[2];
+                         channels[t].broadcast(":" + connections[z].username + " TOPIC " + command[1] + " :" + command[2] + "\r\n");
                          break;
                      }
-                 break;
               }
-              if(s[i] == "PRIVMSG")
+              else if(command[0] == "PRIVMSG")
               {
-                  string msg = string(data2).substr(string(data2).find(":"));
-                  msg = remove_erase_if(msg, "\r\n");
                   //send privmsg to all other users in channel
                   // TODO: warning if channel/user doesn't exist
-                  string recip = s[i+1];
+                  string recip = command[1];
+                  string msg = command[2];
                   if (recip.size() == 0) break;
 
-                  string buf(":" + connections[z].username + " PRIVMSG " + recip + " " + msg + "\r\n");
+                  string buf(":" + connections[z].username + " PRIVMSG " + recip + " :" + msg + "\r\n");
                   if (recip[0] == '#')
                   {
                       for (User &observer : connections)
                           if(&observer != &connections[z])
-                              if (observer.channel.find(s[i+1]) != observer.channel.end())
+                              if (observer.channel.find(command[1]) != observer.channel.end())
                                   observer.write(buf);
                   }
                   else
@@ -337,14 +358,12 @@ int main(int argc,char *argv[])
                               break;
                           }
                   }
-                  break;
               }
-              if(s[i] == "MODE")
+              else if(command[0] == "MODE")
               {
                   //set user mode, required for some irc clients to think you're fully connected(im looking at you xchat)
                   //+i means no messages from people outside the channel and that mode reflects how the server works
-                  string buf;
-                  string channel = remove_erase_if(s[i+1],"\n\r ");
+                  string const& channel = command[1];
                   if(connections[z].channel.size() != 0)
                   {
                       connections[z].write(":tinyirc 324 " + connections[z].username + " " + channel + " +n" + "\r\n");
@@ -355,41 +374,33 @@ int main(int argc,char *argv[])
                       connections[z].detectautisticclient = true;
                       connections[z].write(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n");
                   }
-                   break;
               }
-              if(s[i] == "WHO")
+              else if(command[0] == "WHO")
               {
                   int channelindex = 0;
-                  string p;
+                  string p = command[1];
                   for(int l = 0;l < channels.size();l++)
-                  {
-                      p = s[i+1];
-                      p = remove_erase_if(p," \r\n");
                       if(channels[l].name == p)
                           channelindex = l;
-                  }
-                  string buf(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n");
-                  connections[z].write(buf);
+                  connections[z].write(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n");
                   for(string const &chanuser : channels[channelindex].users)
                   {
                       connections[z].write(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + chanuser + "\r\n");
                   }
                   connections[z].write(":tinyirc 315 " + connections[z].username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n");
-                   break;
               }
-              if(s[i] == "QUIT")
+              else if(command[0] == "QUIT")
               {
                   connections[z--].kill("Quit");
-                  continue;
               }
-              if(s[i] == "PART")
+              else if(command[0] == "PART")
               {
                   vector<string> ctol;
-                  split_string(string(s[i+1]),",",ctol);
+                  split_string(string(command[1]),",",ctol);
+                  string reason = command.size() > 2 ? command[2] : "Leaving";
 
                   for (string &chantopart : ctol)
                   {
-                      chantopart = remove_erase_if(chantopart," \r\n");
                       auto channeliter = std::find_if(channels.begin(), channels.end(),
                           [&](Channel const& c) { return c.name == chantopart; }
                       );
@@ -397,14 +408,12 @@ int main(int argc,char *argv[])
                       if (channeliter == channels.end())
                           continue; // Don't part a channel that doesn't exist
 
-                      channeliter->notify_part(connections[z], "Leaving"); // TODO: use client's reason
+                      channeliter->notify_part(connections[z], reason);
                       channeliter->remove_user(connections[z]);
                   }
-                  break;
               }
-              if(s[i] == "PROTOCTL")
+              else if(command[0] == "PROTOCTL")
               {
-                 string buf;
                   //gives capabilities of the server, some irc clients dont send one for some reason (im looking at you two irssi and weechat)
                   connections[z].write(":tinyirc 252 " + connections[z].username + " 0 :IRC Operators online" + "\r\n");
                   connections[z].write(":tinyirc 253 " + connections[z].username + " 0 :unknown connections" + "\r\n");
@@ -418,8 +427,12 @@ int main(int argc,char *argv[])
                   if(!connections[z].detectautisticclient)
                       connections[z].write(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n");
               }
-               break;
+              else
+              {
+                  cerr << "User " << connections[z].username << " gave us an unknown command " << command_str << endl;
+              }
           }
+
           if(!connections[z].dontkick)
               connections[z].rticks++;
           if(!connections[z].dontkick && connections[z].rticks == 192)
@@ -429,8 +442,7 @@ int main(int argc,char *argv[])
           }
           if(rand() % 480 == 42 && connections[z].status == User::ConnectStatus::READY)
           {
-              string buf;
-              buf ="PING :" + connections[z].username + "\r\n";
+              string buf = "PING :" + connections[z].username + "\r\n";
               send(connections[z].connfd,buf.c_str(),buf.size(),MSG_NOSIGNAL);
               connections[z].dontkick = false;
           }
