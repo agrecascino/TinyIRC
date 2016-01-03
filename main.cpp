@@ -193,6 +193,11 @@ int main(int argc,char *argv[])
                  //stub incase anyone wants to implement authentication
                  break;
               }
+              if(s[i] == "PING")
+              {
+                  connections[z].write("PONG" + s[i+1] + "\r\n");
+                  break;
+              }
 
               if(s[i] == "PONG" && connections[z].userisauthed)
               {
