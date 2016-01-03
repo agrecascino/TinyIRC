@@ -135,27 +135,24 @@ int main(int argc,char *argv[])
              {
                  killconn:
                  close(connections[z].connfd);
-                 for(int o = 0;o < connections[z].channel.size();o++)
+                 for (User &observer : connections)
                  {
-                     for(int l = 0; l < connections.size();l++)
+                     for (string const &observerchan : observer.channel)
                      {
-                       for(int u =0;u < connections[l].channel.size();u++)
-                       {
-                           bool sentmsg = false;
-                           for(int as =0; as < connections[z].channel.size();as++)
-                           {
-                               if(connections[z].channel[as] == connections[l].channel[u])
-                               {
-                                   connections[l].write(":" + connections[z].username + " QUIT " + ":Socket killer." + "\r\n");
-                                   sentmsg = true;
-                                   break;
-                               }
-                           }
-                           if(sentmsg)
-                           {
-                               break;
-                           }
-                       }
+                         bool sentmsg = false;
+                         for (string const &disconnecterchan : connections[z].channel)
+                         {
+                             if(disconnecterchan == observerchan)
+                             {
+                                 observer.write(":" + connections[z].username + " QUIT " + ":Socket killer." + "\r\n");
+                                 sentmsg = true;
+                                 break;
+                             }
+                         }
+                         if(sentmsg)
+                         {
+                             break;
+                         }
                      }
                  }
                  for (string const &userchannel : connections[z].channel)
@@ -348,15 +345,14 @@ int main(int argc,char *argv[])
                   msgf += "\r\n";
                   connections[z].write(msgf);
                   connections[z].write(":tinyirc 366 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " :Sucessfully joined channel." +"\r\n");
-                  for(int p = 0;p < connections.size(); p++)
+                  for (User &observer : connections)
                   {
-                      for(int m = 0;m < connections[p].channel.size();m++)
-                          if(connections[p].channel[m] == channels[channelindex].name)
+                      if (&observer == &connections[z]) continue;
+
+                      for (string const &channel : observer.channel)
+                          if(channel == channels[channelindex].name)
                           {
-                              if(p != z)
-                              {
-                              connections[p].write(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
-                              }
+                              observer.write(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
                           }
                   }
               }
@@ -376,13 +372,13 @@ int main(int argc,char *argv[])
                      }
                  }
                  string kd(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
-                 for(int p = 0;p < connections.size(); p++)
+                 for (User &observer : connections)
                  {
-                     for(int m = 0;m < connections[p].channel.size();m++)
+                     for (string const &channel : observer.channel)
                      {
-                         if(connections[p].channel[m] == s[i+1])
+                         if(channel == s[i+1])
                          {
-                             connections[p].write(kd);
+                             observer.write(kd);
                          }
                      }
 
@@ -395,16 +391,18 @@ int main(int argc,char *argv[])
                    string msg = string(data2).substr(string(data2).find(":"),string(data2).find("\r"));
 
                   //send privmsg to all other users in channel
+                  // TODO: user-to-user private messaging
+                  // TODO: warning if channel/user doesn't exist
                   string buf(":" + connections[z].username + " PRIVMSG " + s[i+1] + " " + msg +"\r\n");
-                  for(int p = 0;p < connections.size(); p++)
+                  for (User &observer : connections)
                   {
-                      if(p != z)
+                      if(&observer != &connections[z])
                       {
-                      for(int m = 0;m < connections[p].channel.size();m++)
+                      for (string const &channel : observer.channel)
                       {
-                          if(connections[p].channel[m] == s[i+1])
+                          if(channel == s[i+1])
                           {
-                              connections[p].write(buf);
+                              observer.write(buf);
                           }
                       }
                       }
@@ -450,30 +448,27 @@ int main(int argc,char *argv[])
               if(s[i] == "QUIT")
               {
                   connections[z].dontkick = false;
-                  for(int o = 0;o < connections[z].channel.size();o++)
+                  for (User &observer : connections)
                   {
-                      for(int l = 0; l < connections.size();l++)
-                      {
-                        for(int u =0;u < connections[l].channel.size();u++)
+                    for (string const &observerchan : observer.channel)
+                    {
+                        bool sentmsg = false;
+                        for (string const &quitterchan : connections[z].channel)
                         {
-                            bool sentmsg = false;
-                            for(int as =0; as < connections[z].channel.size();as++)
+                            if(quitterchan == observerchan)
                             {
-                                if(connections[z].channel[as] == connections[l].channel[u])
-                                {
-                                    string kd = string(":" + connections[z].username + " QUIT " + ":Quit" + "\r\n");
+                                string kd = string(":" + connections[z].username + " QUIT " + ":Quit" + "\r\n");
 
-                                    send(connections[l].connfd,kd.c_str(),kd.size(), MSG_NOSIGNAL);
-                                    sentmsg = true;
-                                    break;
-                                }
-                            }
-                            if(sentmsg)
-                            {
+                                send(observer.connfd,kd.c_str(),kd.size(), MSG_NOSIGNAL);
+                                sentmsg = true;
                                 break;
                             }
                         }
-                      }
+                        if(sentmsg)
+                        {
+                            break;
+                        }
+                    }
                   }
                   for (string const &userchannel : connections[z].channel)
                   {
@@ -532,28 +527,25 @@ int main(int argc,char *argv[])
           if(!connections[z].dontkick && connections[z].rticks == 192)
           {
               close(connections[z].connfd);
-              for(int o = 0;o < connections[z].channel.size();o++)
+              for (User &observer : connections)
               {
-                  for(int l = 0; l < connections.size();l++)
-                  {
-                    for(int u =0;u < connections[l].channel.size();u++)
+                for (string const &observerchan : observer.channel)
+                {
+                    bool sentmsg = false;
+                    for (string const &kickedchan : connections[z].channel)
                     {
-                        bool sentmsg = false;
-                        for(int as =0; as < connections[z].channel.size();as++)
+                        if(kickedchan == observerchan)
                         {
-                            if(connections[z].channel[as] == connections[l].channel[u])
-                            {
-                                connections[l].write(":" + connections[z].username + " QUIT " + ":Ping timed out" + "\r\n");
-                                sentmsg = true;
-                                break;
-                            }
-                        }
-                        if(sentmsg)
-                        {
+                            observer.write(":" + connections[z].username + " QUIT " + ":Ping timed out" + "\r\n");
+                            sentmsg = true;
                             break;
                         }
                     }
-                  }
+                    if(sentmsg)
+                    {
+                        break;
+                    }
+                }
               }
               for (Channel &channel : channels)
               {
