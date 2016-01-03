@@ -67,15 +67,7 @@ string remove_erase_if(string c, string delim)
     string output;
     for(unsigned int i = 0; i < c.size();i++)
     {
-        bool pass = true;
-        for(int k = 0;k < delim.size();k++)
-        {
-        if(c[i] == delim[k])
-        {
-            pass = false;
-        }
-        }
-        if(pass)
+        if(strchr(delim.c_str(), c[i]) == nullptr)
         {
             output += c[i];
         }
