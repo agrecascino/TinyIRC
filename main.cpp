@@ -47,7 +47,7 @@ struct User
     bool dontkick = true;
     bool detectautisticclient = false;
     int rticks = 0;
-    vector<string> channel;
+    set<string> channel;
     string username = "<connecting>";
     User(int c) : connfd(c) {}
 
@@ -260,7 +260,7 @@ int main(int argc,char *argv[])
                   string channame = s[i+1];
                   // TODO handle comma separated chan joins?
                   channame = remove_erase_if(channame,":,. \r\n");
-                  connections[z].channel.push_back(channame);
+                  connections[z].channel.insert(channame);
                   bool channelexists = false;
                   int channelindex = 0;
                   for(int l = 0;l < channels.size();l++)
@@ -294,9 +294,8 @@ int main(int argc,char *argv[])
                   {
                       if (&observer == &connections[z]) continue;
 
-                      for (string const &channel : observer.channel)
-                          if(channel == channels[channelindex].name)
-                              observer.write(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
+                      if (observer.channel.find(channels[channelindex].name) != observer.channel.end())
+                          observer.write(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
                   }
                   break;
               }
@@ -312,9 +311,8 @@ int main(int argc,char *argv[])
                      }
                  string kd(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
                  for (User &observer : connections)
-                     for (string const &channel : observer.channel)
-                         if(channel == s[i+1])
-                             observer.write(kd);
+                     if (observer.channel.find(s[i+1]) != observer.channel.end())
+                         observer.write(kd);
                  break;
               }
               if(s[i] == "PRIVMSG")
@@ -326,9 +324,8 @@ int main(int argc,char *argv[])
                   string buf(":" + connections[z].username + " PRIVMSG " + s[i+1] + " " + msg +"\r\n");
                   for (User &observer : connections)
                       if(&observer != &connections[z])
-                          for (string const &channel : observer.channel)
-                              if(channel == s[i+1])
-                                  observer.write(buf);
+                          if (observer.channel.find(s[i+1]) != observer.channel.end())
+                              observer.write(buf);
                   break;
               }
               if(s[i] == "MODE")
@@ -389,8 +386,8 @@ int main(int argc,char *argv[])
                       if (channeliter == channels.end())
                           continue; // Don't part a channel that doesn't exist
 
-                      channeliter->remove_user(connections[z]);
                       channeliter->notify_part(connections[z], "Leaving"); // TODO: use client's reason
+                      channeliter->remove_user(connections[z]);
                   }
                   break;
               }
@@ -451,21 +448,16 @@ void Channel::remove_user(User& user)
     // Use notify_part for that (or send out quits)
     users.erase(user.username);
 
-    auto userchannels = user.channel;
-    userchannels.erase(std::remove(userchannels.begin(), userchannels.end(), name),
-                       userchannels.end());
+    user.channel.erase(name);
 }
 
 void Channel::notify_part(User &user, string const& reason)
 {
     string partmsg = string(":" + user.username + " PART " + name + " " + reason + "\r\n");
-    user.write(partmsg);
 
-    // TODO pending rewrite when sensible data structures are used
     for (User &connection : connections)
-        for (string const &channel : connection.channel)
-            if (channel == name)
-                connection.write(partmsg);
+        if (connection.channel.find(name) != connection.channel.end())
+            connection.write(partmsg);
 }
 
 void ControlServer()
