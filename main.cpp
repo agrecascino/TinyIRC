@@ -38,6 +38,7 @@ struct Channel
 
     void remove_user(User& user);
     void notify_part(User &user, string const& reason);
+    void broadcast(string const &message);
 };
 
 struct User
@@ -278,7 +279,7 @@ int main(int argc,char *argv[])
                   }
                   string buf;
                   channels[channelindex].users.insert(connections[z].username);
-                  connections[z].write(":"+ connections[z].username + " JOIN :" + channame + "\r\n");
+                  channels[channelindex].broadcast(":" + connections[z].username + " JOIN " + channame + "\r\n");
                   connections[z].write(":tinyirc MODE :" + channame + " +n" + "\r\n");
                   connections[z].write(":tinyirc 332 " + connections[z].username + " " + channame +  " :" + channels[channelindex].topic + "\r\n");
                   string msgf(":tinyirc 353 " + connections[z].username + " = " + channame + " :" + connections[z].username);
@@ -290,13 +291,6 @@ int main(int argc,char *argv[])
                   msgf += "\r\n";
                   connections[z].write(msgf);
                   connections[z].write(":tinyirc 366 " + connections[z].username + " " + channame + " :Sucessfully joined channel." +"\r\n");
-                  for (User &observer : connections)
-                  {
-                      if (&observer == &connections[z]) continue;
-
-                      if (observer.channel.find(channels[channelindex].name) != observer.channel.end())
-                          observer.write(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
-                  }
                   break;
               }
 
@@ -308,11 +302,9 @@ int main(int argc,char *argv[])
                      {
                          msg = msg.substr(1 ,msg.find("\r"));
                          channels[t].topic = msg;
+                         channels[t].broadcast(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
+                         break;
                      }
-                 string kd(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
-                 for (User &observer : connections)
-                     if (observer.channel.find(s[i+1]) != observer.channel.end())
-                         observer.write(kd);
                  break;
               }
               if(s[i] == "PRIVMSG")
@@ -453,11 +445,7 @@ void Channel::remove_user(User& user)
 
 void Channel::notify_part(User &user, string const& reason)
 {
-    string partmsg = string(":" + user.username + " PART " + name + " " + reason + "\r\n");
-
-    for (User &connection : connections)
-        if (connection.channel.find(name) != connection.channel.end())
-            connection.write(partmsg);
+    broadcast(":" + user.username + " PART " + name + " " + reason + "\r\n");
 }
 
 void ControlServer()
@@ -527,4 +515,12 @@ void User::kill(string const &reason)
     connections.erase(std::remove_if(connections.begin(), connections.end(),
             [&](User const &x) { return &x == this; }
         ), connections.end());
+}
+
+void Channel::broadcast(string const &message)
+{
+    // TODO: Get a map, do lookup the opposite way around. Needs rethinking the vector of users.
+    for (User &connection : connections)
+        if (connection.channel.find(name) != connection.channel.end())
+            connection.write(message);
 }
