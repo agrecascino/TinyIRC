@@ -245,6 +245,14 @@ int main(int argc,char *argv[])
                                 user.write(":tinyirc " "NOTICE :*** Name already in use..." "\r\n");
                             else
                             {
+                                // Update nick in all channels
+                                for (string const &channelname : user.channel)
+                                    for (Channel &channel : channels)
+                                        if (channel.name == channelname)
+                                        {
+                                            channel.users.erase(user.username);
+                                            channel.users.insert(new_nick);
+                                        }
                                 user.broadcast(":" + user.username + " NICK " + new_nick + "\r\n");
                                 user.username = new_nick;
                             }
