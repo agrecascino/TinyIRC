@@ -331,14 +331,14 @@ int main(int argc,char *argv[])
               }
               if(s[i] == "JOIN")
               {
-                  connections[z].channel.push_back(s[i+1]);
+                  string channame = s[i+1];
+                  channame = remove_erase_if(channame,": \r\n");
+                  connections[z].channel.push_back(channame);
                   bool channelexists = false;
                   int channelindex = 0;
                   for(int l = 0;l < channels.size();l++)
                   {
-                      string p = s[i+1];
-                      p = remove_erase_if(p," \r\n");
-                      if(channels[l].name == p)
+                      if(channels[l].name == channame)
                       {
                           channelindex = l;
                           channelexists = true;
@@ -346,7 +346,7 @@ int main(int argc,char *argv[])
                   }
                   if(!channelexists)
                   {
-                      channels.push_back(Channel(s[i+1]));
+                      channels.push_back(Channel(channame));
                       channelindex = channels.size() - 1;
                   }
                   string buf;
@@ -368,19 +368,15 @@ int main(int argc,char *argv[])
                   for(int p = 0;p < connections.size(); p++)
                   {
                       for(int m = 0;m < connections[p].channel.size();m++)
-
                           if(connections[p].channel[m] == channels[channelindex].name)
                           {
                               if(p != z)
                               {
-                              string ch = s[i+1];
-                              ch = remove_erase_if(ch,":");
                               connections[p].write(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
                               }
-                              }
-                      }
-
+                          }
                   }
+              }
 
 
 
