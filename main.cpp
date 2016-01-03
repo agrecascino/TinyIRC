@@ -264,8 +264,8 @@ int main(int argc,char *argv[])
                   string channame = s[i+1];
                   // TODO handle comma separated chan joins?
                   channame = remove_erase_if(channame,":,. \r\n");
-                  if(channame [0] != "#")
-                     channame.insert(0,"#");
+                  if(channame [0] != '#')
+                     channame.insert(0,'#');
                   connections[z].channel.insert(channame);
                   bool channelexists = false;
                   int channelindex = 0;
