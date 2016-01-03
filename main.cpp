@@ -19,13 +19,19 @@
 #include <thread>
 using namespace std;
 string remove_erase_if(string c, string delim);
+
+struct User;
 struct Channel
 {
-    string name;
+    string const name;
     string topic = "No topic set.";
     vector<string> users;
     int numusers = 0;
+
     Channel(string name) : name(name) {}
+
+    void remove_user(User& user);
+    void notify_part(User &user, string const& reason);
 };
 
 struct User
@@ -44,6 +50,7 @@ struct User
         return ::write(connfd, data.c_str(), data.size());
     }
 };
+
 string remove_erase_if(string c, string delim)
 {
     string output;
@@ -151,27 +158,13 @@ int main(int argc,char *argv[])
                        }
                      }
                  }
-                 for(int f =0;f < channels.size();f++)
+                 for (string const &userchannel : connections[z].channel)
                  {
-                     int channelindex = 0;
-                     for(int l = 0;l < channels.size();l++)
-                     {
-                         string p = channels[f].name;
-                         p = remove_erase_if(p," \r\n");
-                         if(channels[l].name == p)
-                         {
-                             channelindex = l;
-                             channels[channelindex].numusers--;
-                         }
-
-                     }
-                     for(int o = 0;o < channels[channelindex].users.size();o++)
-                     {
-                       if(channels[channelindex].users[o] == connections[z].username)
-                       {
-                           channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
-                       }
-                     }
+                     auto channeliter = std::find_if(channels.begin(), channels.end(),
+                         [&](Channel const& c) { return c.name == userchannel; }
+                     );
+                     // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
+                     channeliter->remove_user(connections[z]);
                  }
                   connections.erase(connections.begin() + z);
                   continue;
@@ -483,27 +476,13 @@ int main(int argc,char *argv[])
                         }
                       }
                   }
-                  for(int f =0;f < channels.size();f++)
+                  for (string const &userchannel : connections[z].channel)
                   {
-                      int channelindex = 0;
-                      for(int l = 0;l < channels.size();l++)
-                      {
-                          string p = channels[f].name;
-                          p = remove_erase_if(p," \r\n");
-                          if(channels[l].name == p)
-                          {
-                              channelindex = l;
-                              channels[channelindex].numusers--;
-                          }
-
-                      }
-                      for(int o = 0;o < channels[channelindex].users.size();o++)
-                      {
-                        if(channels[channelindex].users[o] == connections[z].username)
-                        {
-                            channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
-                        }
-                      }
+                      auto channeliter = std::find_if(channels.begin(), channels.end(),
+                          [&](Channel const& c) { return c.name == userchannel; }
+                      );
+                      // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
+                      channeliter->remove_user(connections[z]);
                   }
                   break;
               }
@@ -523,32 +502,8 @@ int main(int argc,char *argv[])
                       if (channeliter == channels.end())
                           continue; // Don't part a channel that doesn't exist
 
-                      // TODO check that the user is actually in the channel first
-                      channeliter->numusers--;
-
-                      string const& username = connections[z].username;
-                      auto chanusers = channeliter->users;
-                      std::remove_if(chanusers.begin(), chanusers.end(),
-                          [&](string const& u) { return u == username; }
-                      );
-
-                      auto userchannels = connections[z].channel;
-                      std::remove(userchannels.begin(), userchannels.end(), chantopart);
-
-                      string partmsg = string(":" + connections[z].username + " PART " + chantopart + "\r\n");
-                      connections[z].write(partmsg);
-
-                      // TODO pending rewrite when sensible data structures are used
-                      for (User &connection : connections)
-                      {
-                          for (string const &channel : connection.channel)
-                          {
-                              if (channel == chantopart)
-                              {
-                                  connection.write(partmsg);
-                              }
-                          }
-                      }
+                      channeliter->remove_user(connections[z]);
+                      channeliter->notify_part(connections[z], "Leaving"); // TODO: use client's reason
                   }
               }
               if(s[i] == "PROTOCTL")
@@ -600,27 +555,9 @@ int main(int argc,char *argv[])
                     }
                   }
               }
-              for(int f =0;f < channels.size();f++)
+              for (Channel &channel : channels)
               {
-                  int channelindex = 0;
-                  for(int l = 0;l < channels.size();l++)
-                  {
-                      string p = channels[f].name;
-                      p = remove_erase_if(p," \r\n");
-                      if(channels[l].name == p)
-                      {
-                          channelindex = l;
-                          channels[channelindex].numusers--;
-                      }
-
-                  }
-                  for(int o = 0;o < channels[channelindex].users.size();o++)
-                  {
-                    if(channels[channelindex].users[o] == connections[z].username)
-                    {
-                        channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
-                    }
-                  }
+                  channel.remove_user(connections[z]);
               }
                connections.erase(connections.begin() + z);
                continue;
@@ -652,5 +589,38 @@ void AcceptConnections()
         int connfd = accept(listenfd, nullptr, nullptr);
         if(connfd != -1)
             connections.push_back(User(connfd)); // accept awaiting request
+    }
+}
+
+void Channel::remove_user(User& user)
+{
+    // Does NOT notify any clients that the user is removed!
+    // Use notify_part for that (or send out quits)
+    // TODO check that the user is actually in the channel first
+    numusers--;
+
+    std::remove_if(users.begin(), users.end(),
+        [&](string const& u) { return u == user.username; }
+    );
+
+    auto userchannels = user.channel;
+    std::remove(userchannels.begin(), userchannels.end(), name);
+}
+
+void Channel::notify_part(User &user, string const& reason)
+{
+    string partmsg = string(":" + user.username + " PART " + name + " " + reason + "\r\n");
+    user.write(partmsg);
+
+    // TODO pending rewrite when sensible data structures are used
+    for (User &connection : connections)
+    {
+        for (string const &channel : connection.channel)
+        {
+            if (channel == name)
+            {
+                connection.write(partmsg);
+            }
+        }
     }
 }
