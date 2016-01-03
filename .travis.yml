@@ -1,2 +1,2 @@
 language: cpp
-script: g++ -fstack-protector-strong -Wl,-O1 -O0 -pipe -fPIC -g3 -o tinyirc main.cpp -std=c++11 -lpthread
+script: g++ -Wl,-O1 -O0 -pipe -fPIC -g3 -o tinyirc main.cpp -std=gnu++0x -lpthread
