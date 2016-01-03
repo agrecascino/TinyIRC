@@ -258,11 +258,6 @@ int main(int argc,char *argv[])
           //cout << data[0] << endl;
           //cout << datarecv << endl;
 
-          if(data[0] == NULL)
-          {
-              break;
-          }
-
           if(datarecv == -1)
           {
               break;
