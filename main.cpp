@@ -220,7 +220,6 @@ int main(int argc,char *argv[])
                       sfisdk = "FAGGOT" + to_string(rand() % 9000);
                   }
                   sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
-                  connections[z].username = sfisdk;
 
                   bool inuse = false;
                   for(int k =0; k < connections.size();k++)
@@ -230,6 +229,7 @@ int main(int argc,char *argv[])
                   //if not authed, set username and PING, else set username
                   if(!connections[z].userisauthed)
                   {
+                      connections[z].username = sfisdk;
                       if(inuse)
                       {
                           connections[z--].kill("Nick already in use");
@@ -242,7 +242,10 @@ int main(int argc,char *argv[])
                       if(inuse)
                           connections[z].write(":tinyirc " "NOTICE :*** Name already in use..." "\r\n");
                       else
+                      {
+                          connections[z].username = sfisdk;
                           connections[z].write(":" + connections[z].username + " NICK " + sfisdk + "\r\n");
+                      }
                   }
               }
               if(s[i] == "JOIN")
