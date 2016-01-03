@@ -277,12 +277,13 @@ int main(int argc,char *argv[])
                         channels[channelindex].broadcast(":" + user.username + " JOIN " + channame + "\r\n");
                         user.write(":tinyirc MODE :" + channame + " +n" + "\r\n");
                         user.write(":tinyirc 332 " + user.username + " " + channame +  " :" + channels[channelindex].topic + "\r\n");
-                        string msgf(":tinyirc 353 " + user.username + " = " + channame + " :" + user.username);
+                        string msgf(":tinyirc 353 " + user.username + " = " + channame + " :");
                         for(string const &chanuser : channels[channelindex].users)
                         {
-                            msgf += " ";
                             msgf += chanuser;
+                            msgf += " ";
                         }
+                        msgf.erase(msgf.end() - 1);
                         msgf += "\r\n";
                         user.write(msgf);
                         user.write(":tinyirc 366 " + user.username + " " + channame + " :Sucessfully joined channel." +"\r\n");
@@ -353,11 +354,8 @@ int main(int argc,char *argv[])
                         for(int l = 0;l < channels.size();l++)
                             if(channels[l].name == p)
                                 channelindex = l;
-                        user.write(":tinyirc 352 " + user.username + " " + p + " tinyirc " + user.username + "\r\n");
                         for(string const &chanuser : channels[channelindex].users)
-                        {
                             user.write(":tinyirc 352 " + user.username + " " + p + " tinyirc " + chanuser + "\r\n");
-                        }
                         user.write(":tinyirc 315 " + user.username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n");
                     }
                     else if(command[0] == "QUIT")
