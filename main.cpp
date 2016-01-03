@@ -474,39 +474,49 @@ void ControlServer()
     {
         cmd.erase(cmd.begin(),cmd.end());
         getline(cin,action);
+        if (*(action.end() - 1) == '\n')
+            action.erase(action.end() - 1, action.end());
         split_string(action," ",cmd);
-        for(int z = 0;z < cmd.size();z++)
+        if(cmd[0] == "list")
         {
-            if(cmd[z] == "list")
+            mutex_guard lock(connections_mutex);
+            for(int i = 0;i < connections.size();i++)
+                cout << "User: " << connections[i].username << endl;
+        }
+        else if(cmd[0] == "kick")
+        {
+            if (cmd.size() < 2)
             {
-                mutex_guard lock(connections_mutex);
-                for(int i = 0;i < connections.size();i++)
-                    cout << "User: " << connections[i].username << endl;
+                cout << "Need a username to kick" << endl;
             }
-            else if(cmd[z] == "kick")
+            mutex_guard lock(connections_mutex);
+            string name = cmd[1];
+            auto userit = std::find_if(connections.begin(), connections.end(),
+                [&](User const &u) { return u.username == name; }
+            );
+            if (userit != connections.end())
             {
-                mutex_guard lock(connections_mutex);
-                string nametest = string(cmd[z+1]).substr(0,string(cmd[z+1]).find("\n"));;
-                for(int o = 0;o < connections.size();o++)
-                {
-
-                    if(connections[o].username == nametest)
-                    {
-                        connections[o].kill("Kicked by OP");
-                        break;
-                    }
-                }
+                userit->kill("Kicked by OP");
+                cout << "Kicked \"" << name << "\"!" << endl;
             }
-            else if (cmd[z] == "say")
+            else
+                cout << "Couldn't find a user called \"" << name << "\"" << endl;
+        }
+        else if (cmd[0] == "say")
+        {
+            mutex_guard lock(connections_mutex);
+            size_t space_pos = action.find(' ');
+            if (space_pos != string::npos)
             {
-                size_t space_pos = action.find(' ');
-                if (space_pos != string::npos)
-                {
-                    action.erase(0, space_pos + 1);
-                    for (User &user : connections)
-                        user.write(":tinyirc NOTICE " + user.username + " :" + action + "\r\n");
-                }
+                action.erase(0, space_pos + 1);
+                for (User &user : connections)
+                    user.write(":tinyirc NOTICE " + user.username + " :" + action + "\r\n");
             }
+            cout << "Broadcast sent to " << connections.size() << " users." << endl;
+        }
+        else if (action.size() != 0)
+        {
+            cout << "Unknown command \"" << cmd[0] << "\"" << endl;
         }
     }
 }
