@@ -1,4 +1,5 @@
 #include <iostream>
+#include <mutex>
 #include <set>
 #include <algorithm>
 #include <sys/socket.h>
@@ -87,7 +88,8 @@ void split_string(string const &k, string const &delim, vector<string> &output)
     output.emplace_back(last_ptr);
 }
 
-
+typedef lock_guard<mutex> mutex_guard;
+mutex connections_mutex; // XXX SLOW HACK to stop the server dying randomly
 vector<User> connections;
 vector<Channel> channels;
 int listenfd = 0;
@@ -132,7 +134,9 @@ int main(int argc,char *argv[])
   int datarecv;
 
   while(true)
+  {
     {
+         mutex_guard lock(connections_mutex);
 
          for(int z = 0;z < connections.size();z++)
           {
@@ -515,10 +519,10 @@ int main(int argc,char *argv[])
               send(connections[z].connfd,buf.c_str(),buf.size(),MSG_NOSIGNAL);
               connections[z].dontkick = false;
           }
-         this_thread::sleep_for(chrono::milliseconds(50));
-         }
-      }
-
+        }
+    }
+    this_thread::sleep_for(chrono::milliseconds(50));
+  }
   return 0;
 }
 void AcceptConnections()
@@ -527,7 +531,10 @@ void AcceptConnections()
     {
         int connfd = accept(listenfd, nullptr, nullptr);
         if(connfd != -1)
+        {
+            mutex_guard lock(connections_mutex);
             connections.push_back(User(connfd)); // accept awaiting request
+        }
     }
 }
 
@@ -566,11 +573,13 @@ void ControlServer()
     {
     if(cmd[z] == "list")
     {
+        mutex_guard lock(connections_mutex);
         for(int i = 0;i < connections.size();i++)
             cout << "User: " << connections[i].username << endl;
     }
     if(cmd[z] == "kick")
     {
+        mutex_guard lock(connections_mutex);
         string nametest = string(cmd[z+1]).substr(0,string(cmd[z+1]).find("\n"));;
         for(int o = 0;o < connections.size();o++)
         {
