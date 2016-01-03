@@ -228,12 +228,10 @@ int main(int argc,char *argv[])
               }
               if(s[i] == "NICK")
               {
-                  string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
-                  if(sfisdk.size() > 225)
-                  {
-                      sfisdk = "FAGGOT" + to_string(rand() % 9000);
-                  }
-                  sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
+                  string new_nick = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
+                  new_nick = remove_erase_if(sfisdk, ".,#\n\r");
+                  if(new_nick.size() > 225 || new_nick.size() == 0)
+                      new_nick = "FAGGOT" + to_string(rand() % 9000);
 
                   bool inuse = false;
                   for(int k =0; k < connections.size();k++)
