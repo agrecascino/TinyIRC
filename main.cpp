@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -512,62 +513,42 @@ int main(int argc,char *argv[])
 
                   split_string(string(s[i+1]),",",ctol);
 
-                  for(int f =0;f < ctol.size();f++)
+                  for (string &chantopart : ctol)
                   {
-                      int channelindex = 0;
-                      for(int l = 0;l < channels.size();l++)
+                      chantopart = remove_erase_if(chantopart," \r\n");
+                      auto channeliter = std::find_if(channels.begin(), channels.end(),
+                          [&](Channel const& c) { return c.name == chantopart; }
+                      );
+
+                      if (channeliter == channels.end())
+                          continue; // Don't part a channel that doesn't exist
+
+                      // TODO check that the user is actually in the channel first
+                      channeliter->numusers--;
+
+                      string const& username = connections[z].username;
+                      auto chanusers = channeliter->users;
+                      std::remove_if(chanusers.begin(), chanusers.end(),
+                          [&](string const& u) { return u == username; }
+                      );
+
+                      auto userchannels = connections[z].channel;
+                      std::remove(userchannels.begin(), userchannels.end(), chantopart);
+
+                      string partmsg = string(":" + connections[z].username + " PART " + chantopart + "\r\n");
+                      connections[z].write(partmsg);
+
+                      // TODO pending rewrite when sensible data structures are used
+                      for (User &connection : connections)
                       {
-                          string p = ctol[f];
-                          p = remove_erase_if(p," \r\n");
-                          //raise(SIGABRT);
-                          if(channels[l].name == p)
+                          for (string const &channel : connection.channel)
                           {
-                              channelindex = l;
-                              channels[channelindex].numusers--;
-                          }
-
-                      }
-                      for(int o = 0;o < channels[channelindex].users.size();o++)
-                      {
-                        if(channels[channelindex].users[o] == connections[z].username)
-                        {
-
-                            channels[channelindex].users.erase(channels[channelindex].users.begin() + o);
-                        }
-                      }
-                  }
-                  for(int f =0;f < ctol.size();f++)
-                  {
-                      for(int q =0;q < connections[z].channel.size();q++)
-                      {
-                          if(connections[z].channel[q] == ctol[f])
-                          {
-                              connections[z].channel.erase(connections[z].channel.begin() + q);
-                          }
-                      }
-                  }
-                  for(int p = 0;p < connections.size(); p++)
-                  {
-                      for(int m = 0;m < connections[p].channel.size();m++)
-                      {
-                          for(int gh = 0;gh < ctol.size();gh++)
-                          {
-                              string kdr = string(":" + connections[z].username + " PART " + ctol[gh] + "\r\n");
-
-                              connections[z].write(kdr);
-                          if(connections[p].channel[m] == ctol[gh])
-                          {
-
-                              string ch = s[i+1];
-                              ch = remove_erase_if(ch,":");
-                              string kd = string(":" + connections[z].username + " PART " + ctol[gh] + "\r\n");
-
-                              connections[p].write(kd);
-
-                           }
+                              if (channel == chantopart)
+                              {
+                                  connection.write(partmsg);
+                              }
                           }
                       }
-
                   }
               }
               if(s[i] == "PROTOCTL")
