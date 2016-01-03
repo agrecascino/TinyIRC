@@ -315,14 +315,13 @@ int main(int argc,char *argv[])
               if(s[i] == "PRIVMSG")
               {
                   string msg = string(data2).substr(string(data2).find(":"));
-                  msg = remove_erase_if(msg, "\r");
+                  msg = remove_erase_if(msg, "\r\n");
                   //send privmsg to all other users in channel
-                  // TODO: user-to-user private messaging
                   // TODO: warning if channel/user doesn't exist
                   string recip = s[i+1];
                   if (recip.size() == 0) break;
 
-                  string buf(":" + connections[z].username + " PRIVMSG " + recip + " " + msg +"\r\n");
+                  string buf(":" + connections[z].username + " PRIVMSG " + recip + " " + msg + "\r\n");
                   if (recip[0] == '#')
                   {
                       for (User &observer : connections)
