@@ -125,7 +125,7 @@ int main(int argc,char *argv[])
 
   if (bind(listenfd, (struct sockaddr*)&serv_addr,sizeof(serv_addr)) == -1)
       err(1, "bind to port %d", ntohs(serv_addr.sin_port));
-  
+
   if(listen(listenfd, 10) == -1){
       printf("Failed to listen\n");
       return -1;
@@ -148,8 +148,6 @@ int main(int argc,char *argv[])
 
          for(int z = 0;z < connections.size();z++)
           {
-         // strcpy(sendBuff,"NOTICE AUTH:*** Ayy lmao\r\n");
-          //cout << sendBuff << endl;
           memset(&data2, 0, sizeof data2);
           memset(&data, 0, sizeof data);
           for(int i =0;i < sizeof data2;i++)
