@@ -1,4 +1,5 @@
 #include <iostream>
+#include <set>
 #include <algorithm>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -25,7 +26,7 @@ struct Channel
 {
     string const name;
     string topic = "No topic set.";
-    vector<string> users;
+    set<string> users;
 
     Channel(string name) : name(name) {}
 
@@ -333,7 +334,7 @@ int main(int argc,char *argv[])
                       channelindex = channels.size() - 1;
                   }
                   string buf;
-                  channels[channelindex].users.push_back(connections[z].username);
+                  channels[channelindex].users.insert(connections[z].username);
                   connections[z].channel[connections[z].channel.size() -1] = remove_erase_if(connections[z].channel[connections[z].channel.size() -1], ".,\n\r");
                   connections[z].write(":"+ connections[z].username + " JOIN :" + connections[z].channel[connections[z].channel.size() - 1] + "\r\n");
                   connections[z].write(":tinyirc MODE :" + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n");
@@ -594,9 +595,7 @@ void Channel::remove_user(User& user)
 {
     // Does NOT notify any clients that the user is removed!
     // Use notify_part for that (or send out quits)
-    std::remove_if(users.begin(), users.end(),
-        [&](string const& u) { return u == user.username; }
-    );
+    users.erase(user.username);
 
     auto userchannels = user.channel;
     std::remove(userchannels.begin(), userchannels.end(), name);
