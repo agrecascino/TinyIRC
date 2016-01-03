@@ -328,8 +328,15 @@ int main(int argc,char *argv[])
                  for(int t = 0;t < channels.size();t++)
                      if(channels[t].name == command[1])
                      {
-                         channels[t].topic = command[2];
-                         channels[t].broadcast(":" + connections[z].username + " TOPIC " + command[1] + " :" + command[2] + "\r\n");
+                         if (command.size() > 2)
+                         {
+                             channels[t].topic = command[2];
+                             channels[t].broadcast(":" + connections[z].username + " TOPIC " + command[1] + " :" + command[2] + "\r\n");
+                         }
+                         else
+                         {
+                             connections[z].write(":tinyirc 332 " + connections[z].username + " " + command[1] + " :" + channels[t].topic + "\r\n");
+                         }
                          break;
                      }
               }
