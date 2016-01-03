@@ -21,6 +21,8 @@
 using namespace std;
 string remove_erase_if(string c, string delim);
 
+void ControlServer();
+
 struct User;
 struct Channel
 {
@@ -38,6 +40,7 @@ struct User
 {
     bool userisauthed = false;
     int connfd;
+    bool kickedbyop = false;
     bool dontkick = true;
     bool detectautisticclient = false;
     int rticks = 0;
@@ -120,6 +123,8 @@ int main(int argc,char *argv[])
   //spawn second thread to accept connections, so main loop doesn't get blocked
   thread t(AcceptConnections);
   t.detach();
+  thread z(ControlServer);
+  z.detach();
   //again  because we spawned a thread
   signal(SIGPIPE, SIG_IGN);
   char data[1024];
@@ -144,7 +149,7 @@ int main(int argc,char *argv[])
                          {
                              if(disconnecterchan == observerchan)
                              {
-                                 observer.write(":" + connections[z].username + " QUIT " + ":Socket killer." + "\r\n");
+                                 observer.write(":" + connections[z].username + " QUIT " + (connections[z].kickedbyop ? string(":Kicked by OP") : string(":Socket killer.") ) + "\r\n");
                                  sentmsg = true;
                                  break;
                              }
@@ -176,12 +181,7 @@ int main(int argc,char *argv[])
           datarecv = recv(connections[z].connfd,data,1,MSG_DONTWAIT);
           //hack to get past recv inconsistencies
           //cout << data[0] << endl;
-          cout << datarecv << endl;
-
-          if(data[0] == 0)
-          {
-              break;
-          }
+          //cout << datarecv << endl;
 
           if(datarecv == -1)
           {
@@ -203,7 +203,10 @@ int main(int argc,char *argv[])
               break;
           }
           }
-          
+          if(connections[z].kickedbyop)
+          {
+              goto killconn;
+          }
 
           vector<string> s;
           s.erase(s.begin(),s.end());
@@ -283,14 +286,10 @@ int main(int argc,char *argv[])
                       {
                           string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
                           if(sfisdk.size() > 225)
-                          {
                           sfisdk = "FAGGOT" + to_string(rand() % 9000);
-                          }
                           sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
                           if(sfisdk == connections[k].username)
-                          {
                               inuse = true;
-                          }
                       }
                       if(!inuse)
                       {
@@ -351,62 +350,37 @@ int main(int argc,char *argv[])
 
                       for (string const &channel : observer.channel)
                           if(channel == channels[channelindex].name)
-                          {
                               observer.write(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
-                          }
                   }
               }
-
-
-
 
               if(s[i] == "TOPIC")
               {
                  string msg = string(data2).substr(string(data2).find(":"));
                  for(int t = 0;t < channels.size();t++)
-                 {
                      if(channels[t].name == s[i+1])
                      {
                          msg = msg.substr(1 ,msg.find("\r"));
                          channels[t].topic = msg;
                      }
-                 }
                  string kd(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
                  for (User &observer : connections)
-                 {
                      for (string const &channel : observer.channel)
-                     {
                          if(channel == s[i+1])
-                         {
                              observer.write(kd);
-                         }
-                     }
-
-                 }
-
-
               }
               if(s[i] == "PRIVMSG")
               {
                    string msg = string(data2).substr(string(data2).find(":"),string(data2).find("\r"));
-
                   //send privmsg to all other users in channel
                   // TODO: user-to-user private messaging
                   // TODO: warning if channel/user doesn't exist
                   string buf(":" + connections[z].username + " PRIVMSG " + s[i+1] + " " + msg +"\r\n");
                   for (User &observer : connections)
-                  {
                       if(&observer != &connections[z])
-                      {
-                      for (string const &channel : observer.channel)
-                      {
-                          if(channel == s[i+1])
-                          {
-                              observer.write(buf);
-                          }
-                      }
-                      }
-                  }
+                          for (string const &channel : observer.channel)
+                              if(channel == s[i+1])
+                                  observer.write(buf);
               }
               if(s[i] == "MODE")
               {
@@ -433,9 +407,7 @@ int main(int argc,char *argv[])
                       p = s[i+1];
                       p = remove_erase_if(p," \r\n");
                       if(channels[l].name == p)
-                      {
                           channelindex = l;
-                      }
                   }
                   string buf(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n");
                   connections[z].write(buf);
@@ -449,12 +421,10 @@ int main(int argc,char *argv[])
               {
                   connections[z].dontkick = false;
                   for (User &observer : connections)
-                  {
                     for (string const &observerchan : observer.channel)
                     {
                         bool sentmsg = false;
                         for (string const &quitterchan : connections[z].channel)
-                        {
                             if(quitterchan == observerchan)
                             {
                                 string kd = string(":" + connections[z].username + " QUIT " + ":Quit" + "\r\n");
@@ -463,13 +433,8 @@ int main(int argc,char *argv[])
                                 sentmsg = true;
                                 break;
                             }
-                        }
-                        if(sentmsg)
-                        {
-                            break;
-                        }
+                        if(sentmsg) break;
                     }
-                  }
                   for (string const &userchannel : connections[z].channel)
                   {
                       auto channeliter = std::find_if(channels.begin(), channels.end(),
@@ -484,7 +449,6 @@ int main(int argc,char *argv[])
               if(s[i] == "PART")
               {
                   vector<string> ctol;
-
                   split_string(string(s[i+1]),",",ctol);
 
                   for (string &chantopart : ctol)
@@ -515,15 +479,11 @@ int main(int argc,char *argv[])
                   connections[z].write(":tinyirc 372 " + connections[z].username + " :Padding call" + "\r\n");
                   connections[z].write(":tinyirc 376 " + connections[z].username + " :Ended" + "\r\n");
                   if(!connections[z].detectautisticclient)
-                  {
                       connections[z].write(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n");
-                  }
               }
           }
           if(!connections[z].dontkick)
-          {
               connections[z].rticks++;
-          }
           if(!connections[z].dontkick && connections[z].rticks == 192)
           {
               close(connections[z].connfd);
@@ -533,44 +493,31 @@ int main(int argc,char *argv[])
                 {
                     bool sentmsg = false;
                     for (string const &kickedchan : connections[z].channel)
-                    {
                         if(kickedchan == observerchan)
                         {
                             observer.write(":" + connections[z].username + " QUIT " + ":Ping timed out" + "\r\n");
                             sentmsg = true;
                             break;
                         }
-                    }
                     if(sentmsg)
-                    {
                         break;
-                    }
                 }
               }
               for (Channel &channel : channels)
-              {
                   channel.remove_user(connections[z]);
-              }
-               connections.erase(connections.begin() + z);
-               continue;
+              connections.erase(connections.begin() + z);
+              continue;
           }
           if(rand() % 480 == 42 && connections[z].userisauthed)
           {
-          
-          cout << "Hit random" << endl;
-          string buf;
-          buf ="PING :" + connections[z].username + "\r\n";
-          send(connections[z].connfd,buf.c_str(),buf.size(),MSG_NOSIGNAL);
-          connections[z].dontkick = false;
+              string buf;
+              buf ="PING :" + connections[z].username + "\r\n";
+              send(connections[z].connfd,buf.c_str(),buf.size(),MSG_NOSIGNAL);
+              connections[z].dontkick = false;
           }
-          cout << connections[z].username << endl;
-         // cout << "Proccessing connections" << endl;
          this_thread::sleep_for(chrono::milliseconds(50));
          }
       }
-
-
-
 
   return 0;
 }
@@ -601,13 +548,40 @@ void Channel::notify_part(User &user, string const& reason)
 
     // TODO pending rewrite when sensible data structures are used
     for (User &connection : connections)
-    {
         for (string const &channel : connection.channel)
-        {
             if (channel == name)
-            {
                 connection.write(partmsg);
+}
+
+void ControlServer()
+{
+    string action;
+    vector<string> cmd;
+    while(true)
+    {
+    cmd.erase(cmd.begin(),cmd.end());
+    getline(cin,action);
+    split_string(action," ",cmd);
+    for(int z = 0;z < cmd.size();z++)
+    {
+    if(cmd[z] == "list")
+    {
+        for(int i = 0;i < connections.size();i++)
+            cout << "User: " << connections[i].username << endl;
+    }
+    if(cmd[z] == "kick")
+    {
+        string nametest = string(cmd[z+1]).substr(0,string(cmd[z+1]).find("\n"));;
+        for(int o = 0;o < connections.size();o++)
+        {
+
+            if(connections[o].username == nametest)
+            {
+                connections[o].kickedbyop = true;
+                break;
             }
         }
+    }
+    }
     }
 }
