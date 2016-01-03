@@ -468,11 +468,10 @@ void Channel::notify_part(User &user, string const& reason)
 
 void ControlServer()
 {
-    string action;
-    vector<string> cmd;
     while(true)
     {
-        cmd.erase(cmd.begin(),cmd.end());
+        vector<string> cmd;
+        string action;
         getline(cin,action);
         if (*(action.end() - 1) == '\n')
             action.erase(action.end() - 1, action.end());
