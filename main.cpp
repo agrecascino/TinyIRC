@@ -452,7 +452,8 @@ void Channel::remove_user(User& user)
     users.erase(user.username);
 
     auto userchannels = user.channel;
-    std::remove(userchannels.begin(), userchannels.end(), name);
+    userchannels.erase(std::remove(userchannels.begin(), userchannels.end(), name),
+                       userchannels.end());
 }
 
 void Channel::notify_part(User &user, string const& reason)
