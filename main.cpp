@@ -43,7 +43,8 @@ struct Channel
 
 struct User
 {
-    bool userisauthed = false;
+    enum class ConnectStatus { CONNECTED, NICKSET, READY };
+    ConnectStatus status = ConnectStatus::CONNECTED;
     int connfd;
     bool dontkick = true;
     bool detectautisticclient = false;
@@ -199,18 +200,16 @@ int main(int argc,char *argv[])
                   break;
               }
 
-              if(s[i] == "PONG" && connections[z].userisauthed)
+              if(s[i] == "PONG" && connections[z].status != User::ConnectStatus::NICKSET)
               {
                   //reset anti-drop
                   connections[z].dontkick = true;
                   connections[z].rticks = 0;
                   break;
               }
-              if(s[i] == "PONG" && !connections[z].userisauthed)
+              if(s[i] == "PONG" && connections[z].status == User::ConnectStatus::NICKSET)
               {
                   //oh nice, you accepted our PING, welcome to the party
-                  if(connections[z].username.size() > 0)
-                  {
                   connections[z].write(":tinyirc 001 " + connections[z].username + " :Hello!" + "\r\n");
                   connections[z].write(":tinyirc 002 " + connections[z].username + " :This server is running TinyIRC pre-alpha!" + "\r\n");
                   connections[z].write(":tinyirc 003 " + connections[z].username + " :This server doesn't have date tracking." + "\r\n");
@@ -218,10 +217,9 @@ int main(int argc,char *argv[])
                   connections[z].write(":tinyirc 005 " + connections[z].username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n");
                   connections[z].write(":tinyirc 005 " + connections[z].username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n");
                   connections[z].write(":tinyirc 251 " + connections[z].username + " :LUSERS is unimplemented." + "\r\n");
-                  connections[z].userisauthed = true;
+                  connections[z].status = User::ConnectStatus::READY;
 
                   connections[z].dontkick = true;
-                  }
                   break;
               }
               if(s[i] == "NICK")
@@ -237,7 +235,7 @@ int main(int argc,char *argv[])
                           inuse = true;
 
                   //if not authed, set username and PING, else set username
-                  if(!connections[z].userisauthed)
+                  if(connections[z].status == User::ConnectStatus::CONNECTED)
                   {
                       connections[z].username = new_nick;
                       if(inuse)
@@ -246,6 +244,7 @@ int main(int argc,char *argv[])
                           continue;
                       }
                       connections[z].write("PING :" + connections[z].username + "\r\n");
+                      connections[z].status = User::ConnectStatus::NICKSET;
                   }
                   else
                   {
@@ -428,7 +427,7 @@ int main(int argc,char *argv[])
               connections[z--].kill("Ping timed out");
               continue;
           }
-          if(rand() % 480 == 42 && connections[z].userisauthed)
+          if(rand() % 480 == 42 && connections[z].status == User::ConnectStatus::READY)
           {
               string buf;
               buf ="PING :" + connections[z].username + "\r\n";
