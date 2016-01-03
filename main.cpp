@@ -48,6 +48,7 @@ struct User
     int connfd;
     bool dontkick = true;
     bool detectautisticclient = false;
+    bool dead;
     int rticks = 0;
     set<string> channel;
     string username = "<connecting>";
@@ -177,6 +178,9 @@ int main(int argc,char *argv[])
     {
          mutex_guard lock(connections_mutex);
 
+         connections.erase(std::remove_if(connections.begin(), connections.end(),
+                     [&](User const &u){ return u.dead; }), connections.end());
+
          for(int z = 0;z < connections.size();z++)
           {
           memset(&data2, 0, sizeof data2);
@@ -192,16 +196,15 @@ int main(int argc,char *argv[])
           {
               if (errno != EAGAIN && errno != EWOULDBLOCK)
               {
-                  connections[z--].kill("Connection error");
-                  continue;
+                  connections[z].kill("Connection error");
               }
               break;
           }
 
           if(datarecv == 0)
           {
-              connections[z--].kill("Connection error");
-              continue;
+              connections[z].kill("Connection error");
+              break;
           }
 
           data2[i] = data[0];
@@ -210,6 +213,7 @@ int main(int argc,char *argv[])
               break;
           }
           }
+          if (connections[z].dead) continue;
 
           string command_str(data2);
           chop_newline_off(command_str);
@@ -261,7 +265,7 @@ int main(int argc,char *argv[])
                       connections[z].username = new_nick;
                       if(inuse)
                       {
-                          connections[z--].kill("Nick already in use");
+                          connections[z].kill("Nick already in use");
                           continue;
                       }
                       connections[z].write("PING :" + connections[z].username + "\r\n");
@@ -390,7 +394,7 @@ int main(int argc,char *argv[])
               }
               else if(command[0] == "QUIT")
               {
-                  connections[z--].kill("Quit");
+                  connections[z].kill("Quit");
               }
               else if(command[0] == "PART")
               {
@@ -436,7 +440,7 @@ int main(int argc,char *argv[])
               connections[z].rticks++;
           if(!connections[z].dontkick && connections[z].rticks == 192)
           {
-              connections[z--].kill("Ping timed out");
+              connections[z].kill("Ping timed out");
               continue;
           }
           if(rand() % 480 == 42 && connections[z].status == User::ConnectStatus::READY)
@@ -546,9 +550,7 @@ void User::kill(string const &reason)
         // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
         channeliter->remove_user(*this);
     }
-    connections.erase(std::remove_if(connections.begin(), connections.end(),
-            [&](User const &x) { return &x == this; }
-        ), connections.end());
+    dead = true;
 }
 
 void Channel::broadcast(string const &message)
