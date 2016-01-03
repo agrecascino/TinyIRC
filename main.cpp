@@ -313,7 +313,8 @@ int main(int argc,char *argv[])
               if(s[i] == "JOIN")
               {
                   string channame = s[i+1];
-                  channame = remove_erase_if(channame,": \r\n");
+                  // TODO handle comma separated chan joins?
+                  channame = remove_erase_if(channame,":,. \r\n");
                   connections[z].channel.push_back(channame);
                   bool channelexists = false;
                   int channelindex = 0;
@@ -332,11 +333,10 @@ int main(int argc,char *argv[])
                   }
                   string buf;
                   channels[channelindex].users.insert(connections[z].username);
-                  connections[z].channel[connections[z].channel.size() -1] = remove_erase_if(connections[z].channel[connections[z].channel.size() -1], ".,\n\r");
-                  connections[z].write(":"+ connections[z].username + " JOIN :" + connections[z].channel[connections[z].channel.size() - 1] + "\r\n");
-                  connections[z].write(":tinyirc MODE :" + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n");
-                  connections[z].write(":tinyirc 332 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] +  " :" + channels[channelindex].topic + "\r\n");
-                  string msgf(":tinyirc 353 " + connections[z].username + " = " + connections[z].channel[connections[z].channel.size() -1] + " :" + connections[z].username);
+                  connections[z].write(":"+ connections[z].username + " JOIN :" + channame + "\r\n");
+                  connections[z].write(":tinyirc MODE :" + channame + " +n" + "\r\n");
+                  connections[z].write(":tinyirc 332 " + connections[z].username + " " + channame +  " :" + channels[channelindex].topic + "\r\n");
+                  string msgf(":tinyirc 353 " + connections[z].username + " = " + channame + " :" + connections[z].username);
                   for(string const &user : channels[channelindex].users)
                   {
                       msgf += " ";
@@ -344,7 +344,7 @@ int main(int argc,char *argv[])
                   }
                   msgf += "\r\n";
                   connections[z].write(msgf);
-                  connections[z].write(":tinyirc 366 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] + " :Sucessfully joined channel." +"\r\n");
+                  connections[z].write(":tinyirc 366 " + connections[z].username + " " + channame + " :Sucessfully joined channel." +"\r\n");
                   for (User &observer : connections)
                   {
                       if (&observer == &connections[z]) continue;
