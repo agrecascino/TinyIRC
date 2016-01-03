@@ -339,10 +339,10 @@ int main(int argc,char *argv[])
                   connections[z].write(":tinyirc MODE :" + connections[z].channel[connections[z].channel.size() -1] + " +n" + "\r\n");
                   connections[z].write(":tinyirc 332 " + connections[z].username + " " + connections[z].channel[connections[z].channel.size() -1] +  " :" + channels[channelindex].topic + "\r\n");
                   string msgf(":tinyirc 353 " + connections[z].username + " = " + connections[z].channel[connections[z].channel.size() -1] + " :" + connections[z].username);
-                  for(int yf = 0;yf < channels[channelindex].users.size();yf++)
+                  for(string const &user : channels[channelindex].users)
                   {
-                      msgf += string(" ");
-                      msgf += channels[channelindex].users[yf];
+                      msgf += " ";
+                      msgf += user;
                   }
                   msgf += "\r\n";
                   connections[z].write(msgf);
@@ -440,9 +440,9 @@ int main(int argc,char *argv[])
                   }
                   string buf(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n");
                   connections[z].write(buf);
-                  for(int h =0;h < channels[channelindex].users.size();h++)
+                  for(string const &chanuser : channels[channelindex].users)
                   {
-                      connections[z].write(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + channels[channelindex].users[h] + "\r\n");
+                      connections[z].write(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + chanuser + "\r\n");
                   }
                   connections[z].write(":tinyirc 315 " + connections[z].username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n");
               }
