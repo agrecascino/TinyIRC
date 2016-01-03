@@ -483,6 +483,7 @@ int main(int argc,char *argv[])
                       // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
                       channeliter->remove_user(connections[z]);
                   }
+                  connections.erase(connections.begin() + z);
                   break;
               }
               if(s[i] == "PART")
