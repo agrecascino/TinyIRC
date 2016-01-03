@@ -190,6 +190,7 @@ int main(int argc,char *argv[])
               if(s[i] == "USER")
               {
                  //stub incase anyone wants to implement authentication
+                 break;
               }
 
               if(s[i] == "PONG" && connections[z].userisauthed)
@@ -197,10 +198,13 @@ int main(int argc,char *argv[])
                   //reset anti-drop
                   connections[z].dontkick = true;
                   connections[z].rticks = 0;
+                  break;
               }
               if(s[i] == "PONG" && !connections[z].userisauthed)
               {
                   //oh nice, you accepted our PING, welcome to the party
+                  if(connections[z].username.size() > 0)
+                  {
                   connections[z].write(":tinyirc 001 " + connections[z].username + " :Hello!" + "\r\n");
                   connections[z].write(":tinyirc 002 " + connections[z].username + " :This server is running TinyIRC pre-alpha!" + "\r\n");
                   connections[z].write(":tinyirc 003 " + connections[z].username + " :This server doesn't have date tracking." + "\r\n");
@@ -211,6 +215,8 @@ int main(int argc,char *argv[])
                   connections[z].userisauthed = true;
 
                   connections[z].dontkick = true;
+                  }
+                  break;
               }
               if(s[i] == "NICK")
               {
@@ -247,6 +253,7 @@ int main(int argc,char *argv[])
                           connections[z].write(":" + connections[z].username + " NICK " + sfisdk + "\r\n");
                       }
                   }
+                  break;
               }
               if(s[i] == "JOIN")
               {
@@ -291,6 +298,7 @@ int main(int argc,char *argv[])
                           if(channel == channels[channelindex].name)
                               observer.write(":" + connections[z].username + " JOIN " + channels[channelindex].name + "\r\n");
                   }
+                  break;
               }
 
               if(s[i] == "TOPIC")
@@ -307,6 +315,7 @@ int main(int argc,char *argv[])
                      for (string const &channel : observer.channel)
                          if(channel == s[i+1])
                              observer.write(kd);
+                 break;
               }
               if(s[i] == "PRIVMSG")
               {
@@ -320,6 +329,7 @@ int main(int argc,char *argv[])
                           for (string const &channel : observer.channel)
                               if(channel == s[i+1])
                                   observer.write(buf);
+                  break;
               }
               if(s[i] == "MODE")
               {
@@ -337,6 +347,7 @@ int main(int argc,char *argv[])
                       connections[z].detectautisticclient = true;
                       connections[z].write(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n");
                   }
+                   break;
               }
               if(s[i] == "WHO")
               {
@@ -356,6 +367,7 @@ int main(int argc,char *argv[])
                       connections[z].write(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + chanuser + "\r\n");
                   }
                   connections[z].write(":tinyirc 315 " + connections[z].username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n");
+                   break;
               }
               if(s[i] == "QUIT")
               {
@@ -380,6 +392,7 @@ int main(int argc,char *argv[])
                       channeliter->remove_user(connections[z]);
                       channeliter->notify_part(connections[z], "Leaving"); // TODO: use client's reason
                   }
+                  break;
               }
               if(s[i] == "PROTOCTL")
               {
@@ -397,6 +410,7 @@ int main(int argc,char *argv[])
                   if(!connections[z].detectautisticclient)
                       connections[z].write(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n");
               }
+               break;
           }
           if(!connections[z].dontkick)
               connections[z].rticks++;
