@@ -214,71 +214,36 @@ int main(int argc,char *argv[])
               }
               if(s[i] == "NICK")
               {
-                  //if not authed, set username and PING, else set username
-                  if(!connections[z].userisauthed)
-                  {
-                      bool killconn = false;
-                  for(int k =0; k < connections.size();k++)
-                  {
-                      string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
-                      if(sfisdk.size() > 225)
-                      {
-                          sfisdk = "FAGGOT" + to_string(rand() % 9000);
-                      }
-                      sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
-                      if(sfisdk == connections[k].username)
-                      {
-                          killconn = true;
-                      }
-                  }
-                  if(killconn)
-                  {
-                      //CS major meme killconn == true
-                      connections[z--].kill("Nick already in use");
-                      continue;
-                  }
-                  else
-                  {
-                  string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));;
+                  string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
                   if(sfisdk.size() > 225)
                   {
                       sfisdk = "FAGGOT" + to_string(rand() % 9000);
                   }
+                  sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
                   connections[z].username = sfisdk;
-                  sfisdk = remove_erase_if(connections[z].username, ".,#\n\r");
-                  connections[z].write("PING :" + connections[z].username + "\r\n");
-                  }
+
+                  bool inuse = false;
+                  for(int k =0; k < connections.size();k++)
+                      if(sfisdk == connections[k].username)
+                          inuse = true;
+
+                  //if not authed, set username and PING, else set username
+                  if(!connections[z].userisauthed)
+                  {
+                      if(inuse)
+                      {
+                          connections[z--].kill("Nick already in use");
+                          continue;
+                      }
+                      connections[z].write("PING :" + connections[z].username + "\r\n");
                   }
                   else
                   {
-
-                          bool inuse = false;
-                      for(int k =0; k < connections.size();k++)
-                      {
-                          string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
-                          if(sfisdk.size() > 225)
-                          sfisdk = "FAGGOT" + to_string(rand() % 9000);
-                          sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
-                          if(sfisdk == connections[k].username)
-                              inuse = true;
-                      }
-                      if(!inuse)
-                      {
-                      string sfisdk = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
-                      if(sfisdk.size() > 225)
-                      {
-                      sfisdk = "FAGGOT" + to_string(rand() % 9000);
-                      }
-                      sfisdk = remove_erase_if(sfisdk, ".,#\n\r");
-                          connections[z].write(":" + connections[z].username + " NICK " + sfisdk + "\r\n");
-                      }
-                      else
-                      {
+                      if(inuse)
                           connections[z].write(":tinyirc " "NOTICE :*** Name already in use..." "\r\n");
-                      }
-                    }
-
-
+                      else
+                          connections[z].write(":" + connections[z].username + " NICK " + sfisdk + "\r\n");
+                  }
               }
               if(s[i] == "JOIN")
               {
