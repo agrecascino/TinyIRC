@@ -392,7 +392,7 @@ int main(int argc,char *argv[])
                     }
                     else
                     {
-                        cerr << "User " << user.username << " gave us an unknown command " << command_str << endl;
+                        user.write(":tinyirc 421 " + user.username + " " + command[0] + " :Unknown command\r\n");
                     }
                 }
 
