@@ -305,7 +305,7 @@ int main(int argc,char *argv[])
                  for(int t = 0;t < channels.size();t++)
                      if(channels[t].name == s[i+1])
                      {
-                         msg = msg.substr(1 ,msg.find("\r"));
+                         msg = msg.substr(1, msg.find("\r") - 1);
                          channels[t].topic = msg;
                          channels[t].broadcast(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
                          break;
