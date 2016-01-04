@@ -529,6 +529,7 @@ void User::broadcast(string const &message)
     for (string const &channame : channel)
         for (string const &username : channels.at(channame).users)
             users.insert(usersbyname.at(username));
+    users.insert(this); // Just in case we're not in a channel
 
     for (User *user : users)
         user->write(message);
