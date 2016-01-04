@@ -58,6 +58,7 @@ struct User
 
     ssize_t write(std::string data)
     {
+        cout << "→ " << username << "\t" << data.substr(0, data.size() - 2) << endl;
         return ::write(connfd, data.c_str(), data.size());
     }
 
@@ -191,6 +192,7 @@ int main(int argc,char *argv[])
                 vector<string> command = parse_irc_command(command_str);
                 if (!command.empty())
                 {
+                    cout << "\033[91m← " << user.username << "\t" << command_str << "\033[m" << endl;
                     if(command[0] == "USER")
                     {
                         //stub incase anyone wants to implement authentication
