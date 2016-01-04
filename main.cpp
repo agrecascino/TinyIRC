@@ -505,6 +505,7 @@ void ControlServer()
 void User::kill(string const &reason)
 {
     string const quitbroadcast = ":" + username + " QUIT :" + reason + "\r\n";
+    write(":tinyirc KILL " + username + " :" + reason + "\r\n");
     broadcast(quitbroadcast);
     close(connfd);
     for (string const &userchannel : channel)
