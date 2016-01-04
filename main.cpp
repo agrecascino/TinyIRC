@@ -1,6 +1,7 @@
 #include <iostream>
 #include <mutex>
 #include <set>
+#include <map>
 #include <algorithm>
 #include <cstring>
 #include <chrono>
@@ -21,6 +22,7 @@ extern "C" {
 #include <time.h>
 #include <sys/types.h>
 #include <err.h>
+#include <poll.h>
 }
 using namespace std;
 string remove_erase_if(string c, string delim);
@@ -43,10 +45,12 @@ struct Channel
 
 struct User
 {
-    bool userisauthed = false;
+    enum class ConnectStatus { CONNECTED, NICKSET, READY };
+    ConnectStatus status = ConnectStatus::CONNECTED;
     int connfd;
     bool dontkick = true;
     bool detectautisticclient = false;
+    bool dead = false;
     int rticks = 0;
     set<string> channel;
     string username = "<connecting>";
@@ -54,11 +58,13 @@ struct User
 
     ssize_t write(std::string data)
     {
+        cout << "→ " << username << "\t" << data.substr(0, data.size() - 2) << endl;
         return ::write(connfd, data.c_str(), data.size());
     }
 
     void kill(string const &reason);
     void broadcast(string const &message);
+    string try_read();
 };
 
 string remove_erase_if(string c, string delim)
@@ -66,20 +72,50 @@ string remove_erase_if(string c, string delim)
     string output;
     for(unsigned int i = 0; i < c.size();i++)
     {
-        bool pass = true;
-        for(int k = 0;k < delim.size();k++)
-        {
-        if(c[i] == delim[k])
-        {
-            pass = false;
-        }
-        }
-        if(pass)
+        if(strchr(delim.c_str(), c[i]) == nullptr)
         {
             output += c[i];
         }
     }
     return output;
+}
+
+void chop_newline_off(string &in)
+{
+    auto last = in.end() - 1;
+    if (*last != '\n') return;
+    auto secondlast = last - 1;
+    if (*secondlast == '\r')
+        in.erase(secondlast, in.end());
+    else
+        in.erase(last, in.end());
+}
+
+vector<string> parse_irc_command(string const &command)
+{
+    vector<string> out;
+    size_t pos = 0, end = command.size();
+
+    while (pos < end)
+    {
+        while (pos < end && command[pos] == ' ') pos++; // Skip spaces
+        if (pos >= end) break;
+        if (command[pos] == ':')
+        {
+            if (out.empty()) // Origin prefix, ignore
+                while (pos < end && command[pos] != ' ') pos++;
+            else // Long parameter
+                out.emplace_back(command.substr(pos + 1));
+            break;
+        }
+        else
+        {
+            size_t copyfrom = pos;
+            while (pos < end && command[pos] != ' ') pos++;
+            out.emplace_back(command.substr(copyfrom, pos - copyfrom));
+        }
+    }
+    return out;
 }
 
 void split_string(string const &k, string const &delim, vector<string> &output)
@@ -96,360 +132,318 @@ void split_string(string const &k, string const &delim, vector<string> &output)
 
 typedef lock_guard<mutex> mutex_guard;
 mutex connections_mutex; // XXX SLOW HACK to stop the server dying randomly
-vector<User> connections;
-vector<Channel> channels;
+vector<User*> connections;
+map<string, User*> usersbyname; // username → user
+map<string, Channel> channels; // channel name → channel
 int listenfd = 0;
 struct sockaddr_in serv_addr;
-void AcceptConnections();
 int main(int argc,char *argv[])
 {
-  //Seed RNG
-  srand(time(NULL));
-  //get socket
-  listenfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (listenfd == -1)
-      err(1, "socket");
-  int g = 1;
+    //Seed RNG
+    srand(time(NULL));
+    //get socket
+    listenfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (listenfd == -1)
+        err(1, "socket");
+    int g = 1;
 
-  signal(SIGPIPE, SIG_IGN);
-  //ignore sigpipes
-  setsockopt(listenfd,SOL_SOCKET,SO_REUSEADDR,&g,sizeof(int));
-  //force drop other applications on the same port
-  //fcntl(listenfd, F_SETFL, O_NONBLOCK);
+    signal(SIGPIPE, SIG_IGN);
+    //ignore sigpipes
+    setsockopt(listenfd,SOL_SOCKET,SO_REUSEADDR,&g,sizeof(int));
+    //force drop other applications on the same port
+    //fcntl(listenfd, F_SETFL, O_NONBLOCK);
 
-  memset(&serv_addr, '0', sizeof(serv_addr));
+    memset(&serv_addr, '0', sizeof(serv_addr));
 
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serv_addr.sin_port = htons(6667);
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port = htons(6667);
 
-  if (bind(listenfd, (struct sockaddr*)&serv_addr,sizeof(serv_addr)) == -1)
-      err(1, "bind to port %d", ntohs(serv_addr.sin_port));
+    if (bind(listenfd, (struct sockaddr*)&serv_addr,sizeof(serv_addr)) == -1)
+        err(1, "bind to port %d", ntohs(serv_addr.sin_port));
 
-  if(listen(listenfd, 10) == -1){
-      printf("Failed to listen\n");
-      return -1;
-  }
-  //spawn second thread to accept connections, so main loop doesn't get blocked
-  thread t(AcceptConnections);
-  t.detach();
-  thread z(ControlServer);
-  z.detach();
-  //again  because we spawned a thread
-  signal(SIGPIPE, SIG_IGN);
-  char data[1024];
-  char data2[1024];
-  int datarecv;
-
-  while(true)
-  {
-    {
-         mutex_guard lock(connections_mutex);
-
-         for(int z = 0;z < connections.size();z++)
-          {
-          memset(&data2, 0, sizeof data2);
-          memset(&data, 0, sizeof data);
-          for(int i =0;i < sizeof data2;i++)
-          {
-          datarecv = recv(connections[z].connfd,data,1,MSG_DONTWAIT);
-          //hack to get past recv inconsistencies
-          //cout << data[0] << endl;
-          //cout << datarecv << endl;
-
-          if(datarecv == -1)
-          {
-              if (errno != EAGAIN && errno != EWOULDBLOCK)
-              {
-                  connections[z--].kill("Connection error");
-                  continue;
-              }
-              break;
-          }
-
-          if(datarecv == 0)
-          {
-              connections[z--].kill("Connection error");
-              continue;
-          }
-
-          data2[i] = data[0];
-          if(data[0] == '\n')
-          {
-              break;
-          }
-          }
-
-          vector<string> s;
-          s.erase(s.begin(),s.end());
-          string data2c = data2;
-          split_string(data2c," \n",s);
-          //split packet by whitespace
-          for(int i =0;i < s.size();i++)
-          {
-              if(s[i] == "USER")
-              {
-                 //stub incase anyone wants to implement authentication
-                 break;
-              }
-              if(s[i] == "PING")
-              {
-                  string cheese = remove_erase_if(s[i+1],"\r\n ");
-                  connections[z].write(":tinyirc PONG " + cheese + "\r\n");
-                  break;
-              }
-
-              if(s[i] == "PONG" && connections[z].userisauthed)
-              {
-                  //reset anti-drop
-                  connections[z].dontkick = true;
-                  connections[z].rticks = 0;
-                  break;
-              }
-              if(s[i] == "PONG" && !connections[z].userisauthed)
-              {
-                  //oh nice, you accepted our PING, welcome to the party
-                  if(connections[z].username.size() > 0)
-                  {
-                  connections[z].write(":tinyirc 001 " + connections[z].username + " :Hello!" + "\r\n");
-                  connections[z].write(":tinyirc 002 " + connections[z].username + " :This server is running TinyIRC pre-alpha!" + "\r\n");
-                  connections[z].write(":tinyirc 003 " + connections[z].username + " :This server doesn't have date tracking." + "\r\n");
-                  connections[z].write(":tinyirc 004 " + connections[z].username + " tinyirc " + " tinyirc(0.0.1) " + "CDGNRSUWagilopqrswxyz" + " BCIMNORSabcehiklmnopqstvz" + " Iabehkloqv" + "\r\n");
-                  connections[z].write(":tinyirc 005 " + connections[z].username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n");
-                  connections[z].write(":tinyirc 005 " + connections[z].username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n");
-                  connections[z].write(":tinyirc 251 " + connections[z].username + " :LUSERS is unimplemented." + "\r\n");
-                  connections[z].userisauthed = true;
-
-                  connections[z].dontkick = true;
-                  }
-                  break;
-              }
-              if(s[i] == "NICK")
-              {
-                  string new_nick = string(s[i+1]).substr(0,string(s[i+1]).find("\r"));
-                  new_nick = remove_erase_if(new_nick, ".,#\n\r");
-                  if(new_nick.size() > 225 || new_nick.size() == 0)
-                      new_nick = "FAGGOT" + to_string(rand() % 9000);
-
-                  bool inuse = false;
-                  for(int k =0; k < connections.size();k++)
-                      if(new_nick == connections[k].username)
-                          inuse = true;
-
-                  //if not authed, set username and PING, else set username
-                  if(!connections[z].userisauthed)
-                  {
-                      connections[z].username = new_nick;
-                      if(inuse)
-                      {
-                          connections[z--].kill("Nick already in use");
-                          continue;
-                      }
-                      connections[z].write("PING :" + connections[z].username + "\r\n");
-                  }
-                  else
-                  {
-                      if(inuse)
-                          connections[z].write(":tinyirc " "NOTICE :*** Name already in use..." "\r\n");
-                      else
-                      {
-                          connections[z].broadcast(":" + connections[z].username + " NICK " + new_nick + "\r\n");
-                          connections[z].username = new_nick;
-                      }
-                  }
-                  break;
-              }
-              if(s[i] == "JOIN")
-              {
-                  string channame = s[i+1];
-                  // TODO handle comma separated chan joins?
-                  channame = remove_erase_if(channame,":,. \r\n");
-                  connections[z].channel.insert(channame);
-                  bool channelexists = false;
-                  int channelindex = 0;
-                  for(int l = 0;l < channels.size();l++)
-                  {
-                      if(channels[l].name == channame)
-                      {
-                          channelindex = l;
-                          channelexists = true;
-                      }
-                  }
-                  if(!channelexists)
-                  {
-                      channels.push_back(Channel(channame));
-                      channelindex = channels.size() - 1;
-                  }
-                  string buf;
-                  channels[channelindex].users.insert(connections[z].username);
-                  channels[channelindex].broadcast(":" + connections[z].username + " JOIN " + channame + "\r\n");
-                  connections[z].write(":tinyirc MODE :" + channame + " +n" + "\r\n");
-                  connections[z].write(":tinyirc 332 " + connections[z].username + " " + channame +  " :" + channels[channelindex].topic + "\r\n");
-                  string msgf(":tinyirc 353 " + connections[z].username + " = " + channame + " :" + connections[z].username);
-                  for(string const &user : channels[channelindex].users)
-                  {
-                      msgf += " ";
-                      msgf += user;
-                  }
-                  msgf += "\r\n";
-                  connections[z].write(msgf);
-                  connections[z].write(":tinyirc 366 " + connections[z].username + " " + channame + " :Sucessfully joined channel." +"\r\n");
-                  break;
-              }
-
-              if(s[i] == "TOPIC")
-              {
-                 string msg = string(data2).substr(string(data2).find(":"));
-                 for(int t = 0;t < channels.size();t++)
-                     if(channels[t].name == s[i+1])
-                     {
-                         msg = msg.substr(1, msg.find("\r") - 1);
-                         channels[t].topic = msg;
-                         channels[t].broadcast(":" + connections[z].username + " TOPIC " + s[i+1] + " " + msg + "\r\n");
-                         break;
-                     }
-                 break;
-              }
-              if(s[i] == "PRIVMSG")
-              {
-                  string msg = string(data2).substr(string(data2).find(":"));
-                  msg = remove_erase_if(msg, "\r\n");
-                  //send privmsg to all other users in channel
-                  // TODO: warning if channel/user doesn't exist
-                  string recip = s[i+1];
-                  if (recip.size() == 0) break;
-
-                  string buf(":" + connections[z].username + " PRIVMSG " + recip + " " + msg + "\r\n");
-                  if (recip[0] == '#')
-                  {
-                      for (User &observer : connections)
-                          if(&observer != &connections[z])
-                              if (observer.channel.find(s[i+1]) != observer.channel.end())
-                                  observer.write(buf);
-                  }
-                  else
-                  {
-                      for (User &user : connections)
-                          if (user.username == recip)
-                          {
-                              user.write(buf);
-                              break;
-                          }
-                  }
-                  break;
-              }
-              if(s[i] == "MODE")
-              {
-                  //set user mode, required for some irc clients to think you're fully connected(im looking at you xchat)
-                  //+i means no messages from people outside the channel and that mode reflects how the server works
-                  string buf;
-                  string channel = remove_erase_if(s[i+1],"\n\r ");
-                  if(connections[z].channel.size() != 0)
-                  {
-                      connections[z].write(":tinyirc 324 " + connections[z].username + " " + channel + " +n" + "\r\n");
-                      connections[z].write(":tinyirc 329 " + connections[z].username + " " + channel + " 0 0" + "\r\n");
-                  }
-                  else
-                  {
-                      connections[z].detectautisticclient = true;
-                      connections[z].write(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n");
-                  }
-                   break;
-              }
-              if(s[i] == "WHO")
-              {
-                  int channelindex = 0;
-                  string p;
-                  for(int l = 0;l < channels.size();l++)
-                  {
-                      p = s[i+1];
-                      p = remove_erase_if(p," \r\n");
-                      if(channels[l].name == p)
-                          channelindex = l;
-                  }
-                  string buf(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + connections[z].username + "\r\n");
-                  connections[z].write(buf);
-                  for(string const &chanuser : channels[channelindex].users)
-                  {
-                      connections[z].write(":tinyirc 352 " + connections[z].username + " " + p + " tinyirc " + chanuser + "\r\n");
-                  }
-                  connections[z].write(":tinyirc 315 " + connections[z].username + " " + channels[channelindex].name + " :End of /WHO list." + "\r\n");
-                   break;
-              }
-              if(s[i] == "QUIT")
-              {
-                  connections[z--].kill("Quit");
-                  continue;
-              }
-              if(s[i] == "PART")
-              {
-                  vector<string> ctol;
-                  split_string(string(s[i+1]),",",ctol);
-
-                  for (string &chantopart : ctol)
-                  {
-                      chantopart = remove_erase_if(chantopart," \r\n");
-                      auto channeliter = std::find_if(channels.begin(), channels.end(),
-                          [&](Channel const& c) { return c.name == chantopart; }
-                      );
-
-                      if (channeliter == channels.end())
-                          continue; // Don't part a channel that doesn't exist
-
-                      channeliter->notify_part(connections[z], "Leaving"); // TODO: use client's reason
-                      channeliter->remove_user(connections[z]);
-                  }
-                  break;
-              }
-              if(s[i] == "PROTOCTL")
-              {
-                 string buf;
-                  //gives capabilities of the server, some irc clients dont send one for some reason (im looking at you two irssi and weechat)
-                  connections[z].write(":tinyirc 252 " + connections[z].username + " 0 :IRC Operators online" + "\r\n");
-                  connections[z].write(":tinyirc 253 " + connections[z].username + " 0 :unknown connections" + "\r\n");
-                  connections[z].write(":tinyirc 254 " + connections[z].username + " 0 :LUSERS is unimplmented" + "\r\n");
-                  connections[z].write(":tinyirc 255 " + connections[z].username + " :LUSERS is unimplmented" + "\r\n");
-                  connections[z].write(":tinyirc 265 " + connections[z].username + " 1 1 :LUSERS is unimplmented" + "\r\n");
-                  connections[z].write(":tinyirc 266 " + connections[z].username + " 1 1 :LUSERS is unimplmented" + "\r\n");
-                  connections[z].write(":tinyirc 375 " + connections[z].username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n");
-                  connections[z].write(":tinyirc 372 " + connections[z].username + " :Padding call" + "\r\n");
-                  connections[z].write(":tinyirc 376 " + connections[z].username + " :Ended" + "\r\n");
-                  if(!connections[z].detectautisticclient)
-                      connections[z].write(":" + connections[z].username + " MODE " + connections[z].username + " :+i" + "\r\n");
-              }
-               break;
-          }
-          if(!connections[z].dontkick)
-              connections[z].rticks++;
-          if(!connections[z].dontkick && connections[z].rticks == 192)
-          {
-              connections[z--].kill("Ping timed out");
-              continue;
-          }
-          if(rand() % 480 == 42 && connections[z].userisauthed)
-          {
-              string buf;
-              buf ="PING :" + connections[z].username + "\r\n";
-              send(connections[z].connfd,buf.c_str(),buf.size(),MSG_NOSIGNAL);
-              connections[z].dontkick = false;
-          }
-        }
+    if(listen(listenfd, 10) == -1){
+        printf("Failed to listen\n");
+        return -1;
     }
-    this_thread::sleep_for(chrono::milliseconds(50));
-  }
-  return 0;
-}
-void AcceptConnections()
-{
-    while(1)
+    thread z(ControlServer);
+    z.detach();
+    //again  because we spawned a thread
+    signal(SIGPIPE, SIG_IGN);
+
+    while(true)
     {
-        int connfd = accept(listenfd, nullptr, nullptr);
-        if(connfd != -1)
         {
             mutex_guard lock(connections_mutex);
-            connections.push_back(User(connfd)); // accept awaiting request
+
+            auto dead_connections = std::remove_if(connections.begin(), connections.end(),
+                        [&](User const *u){ return u->dead; });
+            for (auto it = dead_connections; it != connections.end(); it++)
+                delete *it;
+            connections.erase(dead_connections, connections.end());
+
+            for (User *puser : connections)
+            {
+                User &user = *puser;
+                string command_str = user.try_read();
+                if (user.dead) continue;
+
+                chop_newline_off(command_str);
+                vector<string> command = parse_irc_command(command_str);
+                if (!command.empty())
+                {
+                    cout << "\033[91m← " << user.username << "\t" << command_str << "\033[m" << endl;
+                    if(command[0] == "USER")
+                    {
+                        //stub incase anyone wants to implement authentication
+                    }
+                    else if(command[0] == "PING")
+                    {
+                        user.write(":tinyirc PONG :" + command[1] + "\r\n");
+                    }
+                    else if(command[0] == "PONG" && user.status != User::ConnectStatus::NICKSET)
+                    {
+                        //reset anti-drop
+                        user.dontkick = true;
+                        user.rticks = 0;
+                    }
+                    else if(command[0] == "PONG" && user.status == User::ConnectStatus::NICKSET)
+                    {
+                        //oh nice, you accepted our PING, welcome to the party
+                        user.write(":tinyirc 001 " + user.username + " :Hello!" + "\r\n");
+                        user.write(":tinyirc 002 " + user.username + " :This server is running TinyIRC pre-alpha!" + "\r\n");
+                        user.write(":tinyirc 003 " + user.username + " :This server doesn't have date tracking." + "\r\n");
+                        user.write(":tinyirc 004 " + user.username + " tinyirc " + " tinyirc(0.0.1) " + "CDGNRSUWagilopqrswxyz" + " BCIMNORSabcehiklmnopqstvz" + " Iabehkloqv" + "\r\n");
+                        user.write(":tinyirc 005 " + user.username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n");
+                        user.write(":tinyirc 005 " + user.username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n");
+                        user.write(":tinyirc 251 " + user.username + " :LUSERS is unimplemented." + "\r\n");
+                        user.status = User::ConnectStatus::READY;
+
+                        user.dontkick = true;
+                    }
+                    else if(command[0] == "NICK")
+                    {
+                        string new_nick = remove_erase_if(command[1], ".,#\r");
+                        if(new_nick.size() > 225 || new_nick.size() == 0)
+                            new_nick = "FAGGOT" + to_string(rand() % 9000);
+
+                        bool inuse = false;
+                        if (usersbyname.find(new_nick) != usersbyname.end())
+                            inuse = true;
+
+                        //if not authed, set username and PING, else set username
+                        if(user.status == User::ConnectStatus::CONNECTED)
+                        {
+                            user.username = new_nick;
+                            if(inuse)
+                            {
+                                user.kill("Nick already in use");
+                                continue;
+                            }
+                            user.write("PING :" + user.username + "\r\n");
+                            user.status = User::ConnectStatus::NICKSET;
+                            usersbyname[new_nick] = &user;
+                        }
+                        else
+                        {
+                            if(inuse)
+                                user.write(":tinyirc " "NOTICE :*** Name already in use..." "\r\n");
+                            else
+                            {
+                                // Update nick in all channels
+                                for (string const &channelname : user.channel)
+                                {
+                                    Channel &channel = channels.at(channelname);
+                                    channel.users.erase(user.username);
+                                    channel.users.insert(new_nick);
+                                }
+                                usersbyname[new_nick] = &user;
+                                usersbyname.erase(user.username);
+                                user.broadcast(":" + user.username + " NICK " + new_nick + "\r\n");
+                                user.username = new_nick;
+                            }
+                        }
+                    }
+                    else if(command[0] == "JOIN")
+                    {
+                        string channame = command[1];
+                        // TODO handle comma separated chan joins?
+                        channame = remove_erase_if(channame,":,. \r");
+                        if(channame [0] != '#')
+                            channame.insert(0,"#");
+
+                        Channel &channel = channels.emplace(piecewise_construct, forward_as_tuple(channame), forward_as_tuple(channame)).first->second;
+                        user.channel.insert(channame);
+                        channel.users.insert(user.username);
+                        channel.broadcast(":" + user.username + " JOIN " + channame + "\r\n");
+                        user.write(":tinyirc MODE :" + channame + " +n" + "\r\n");
+                        user.write(":tinyirc 332 " + user.username + " " + channame +  " :" + channel.topic + "\r\n");
+                        string msgf(":tinyirc 353 " + user.username + " = " + channame + " :");
+                        for(string const &chanuser : channel.users)
+                        {
+                            msgf += chanuser;
+                            msgf += " ";
+                        }
+                        msgf.erase(msgf.end() - 1);
+                        msgf += "\r\n";
+                        user.write(msgf);
+                        user.write(":tinyirc 366 " + user.username + " " + channame + " :Sucessfully joined channel." +"\r\n");
+                    }
+                    else if(command[0] == "TOPIC")
+                    {
+                        auto channel_iter = channels.find(command[1]);
+                        if (channel_iter == channels.end())
+                        {
+                            user.write(":tinyirc 403 " + user.username + " " + command[1] + " :No such channel\r\n");
+                        }
+                        else
+                        {
+                            Channel &channel = channel_iter->second;
+                            if (command.size() > 2)
+                            {
+                                channel.topic = command[2];
+                                channel.broadcast(":" + user.username + " TOPIC " + command[1] + " :" + command[2] + "\r\n");
+                            }
+                            else
+                            {
+                                user.write(":tinyirc 332 " + user.username + " " + command[1] + " :" + channel.topic + "\r\n");
+                            }
+                        }
+                    }
+                    else if(command[0] == "PRIVMSG")
+                    {
+                        //send privmsg to all other users in channel
+                        // TODO: warning if channel/user doesn't exist
+                        string recip = command[1];
+                        string msg = command[2];
+                        if (recip.size() == 0) break;
+
+                        string buf(":" + user.username + " PRIVMSG " + recip + " :" + msg + "\r\n");
+                        try
+                        {
+                            if (recip[0] == '#')
+                                for (string username : channels.at(recip).users)
+                                {
+                                    User *chanuser = usersbyname.at(username);
+                                    if (&user != chanuser)
+                                        usersbyname.at(username)->write(buf);
+                                }
+                            else
+                                usersbyname.at(recip)->write(buf);
+                        }
+                        catch (out_of_range e)
+                        {
+                           user.write(":tinyirc 401 " + user.username + " " + recip + " :No such nick/channel\r\n");
+                        }
+                    }
+                    else if(command[0] == "MODE")
+                    {
+                        //set user mode, required for some irc clients to think you're fully connected(im looking at you xchat)
+                        //+i means no messages from people outside the channel and that mode reflects how the server works
+                        string const& channel = command[1];
+                        if(user.channel.size() != 0)
+                        {
+                            user.write(":tinyirc 324 " + user.username + " " + channel + " +n" + "\r\n");
+                            user.write(":tinyirc 329 " + user.username + " " + channel + " 0 0" + "\r\n");
+                        }
+                        else
+                        {
+                            user.detectautisticclient = true;
+                            user.write(":" + user.username + " MODE " + user.username + " :+i" + "\r\n");
+                        }
+                    }
+                    else if(command[0] == "WHO")
+                    {
+                        auto const channel_iter = channels.find(command[1]);
+                        if (channel_iter != channels.end())
+                            for(string const &chanuser : channel_iter->second.users)
+                                user.write(":tinyirc 352 " + user.username + " " + command[1] + " tinyirc " + chanuser + "\r\n");
+                        user.write(":tinyirc 315 " + user.username + " " + command[1] + " :End of /WHO list.\r\n");
+                    }
+                    else if(command[0] == "QUIT")
+                    {
+                        user.kill("Quit");
+                    }
+                    else if(command[0] == "PART")
+                    {
+                        vector<string> ctol;
+                        split_string(string(command[1]),",",ctol);
+                        string reason = command.size() > 2 ? command[2] : "Leaving";
+
+                        for (string &chantopart : ctol)
+                        {
+                            auto channeliter = channels.find(chantopart);
+                            if (channeliter == channels.end())
+                                continue; // Don't part a channel that doesn't exist
+
+                            Channel &channel = channeliter->second;
+                            channel.notify_part(user, reason);
+                            channel.remove_user(user);
+                        }
+                    }
+                    else if(command[0] == "PROTOCTL")
+                    {
+                        //gives capabilities of the server, some irc clients dont send one for some reason (im looking at you two irssi and weechat)
+                        user.write(":tinyirc 252 " + user.username + " 0 :IRC Operators online" + "\r\n");
+                        user.write(":tinyirc 253 " + user.username + " 0 :unknown connections" + "\r\n");
+                        user.write(":tinyirc 254 " + user.username + " 0 :LUSERS is unimplmented" + "\r\n");
+                        user.write(":tinyirc 255 " + user.username + " :LUSERS is unimplmented" + "\r\n");
+                        user.write(":tinyirc 265 " + user.username + " 1 1 :LUSERS is unimplmented" + "\r\n");
+                        user.write(":tinyirc 266 " + user.username + " 1 1 :LUSERS is unimplmented" + "\r\n");
+                        user.write(":tinyirc 375 " + user.username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n");
+                        user.write(":tinyirc 372 " + user.username + " :Padding call" + "\r\n");
+                        user.write(":tinyirc 376 " + user.username + " :Ended" + "\r\n");
+                        if(!user.detectautisticclient)
+                            user.write(":" + user.username + " MODE " + user.username + " :+i" + "\r\n");
+                    }
+                    else
+                    {
+                        user.write(":tinyirc 421 " + user.username + " " + command[0] + " :Unknown command\r\n");
+                    }
+                }
+
+                if(!user.dontkick)
+                    user.rticks++;
+                if(!user.dontkick && user.rticks == 192)
+                {
+                    user.kill("Ping timed out");
+                    continue;
+                }
+                if(rand() % 480 == 42 && user.status == User::ConnectStatus::READY)
+                {
+                    string buf = "PING :" + user.username + "\r\n";
+                    send(user.connfd,buf.c_str(),buf.size(),MSG_NOSIGNAL);
+                    user.dontkick = false;
+                }
+            }
         }
+        connections_mutex.lock();
+        pollfd *pollfds = new pollfd[connections.size() + 1];
+        pollfds[0].fd = listenfd;
+        pollfds[0].events = POLLIN;
+        int i = 1;
+        for (User *user : connections)
+        {
+            pollfds[i].fd = user->connfd;
+            pollfds[i].events = POLLIN;
+            i++;
+        }
+        connections_mutex.unlock();
+
+        poll(pollfds, i, 30000);
+
+        if (pollfds[0].revents & POLLIN)
+        {
+            int connfd = accept(listenfd, nullptr, nullptr);
+            if(connfd != -1)
+            {
+                mutex_guard lock(connections_mutex);
+                connections.push_back(new User(connfd)); // accept awaiting request
+            }
+        }
+        delete[] pollfds;
     }
+    return 0;
 }
 
 void Channel::remove_user(User& user)
@@ -479,8 +473,8 @@ void ControlServer()
         if(cmd[0] == "list")
         {
             mutex_guard lock(connections_mutex);
-            for(int i = 0;i < connections.size();i++)
-                cout << "User: " << connections[i].username << endl;
+            for (User *user : connections)
+                cout << "User: " << user->username << endl;
         }
         else if(cmd[0] == "kick")
         {
@@ -491,12 +485,10 @@ void ControlServer()
             }
             mutex_guard lock(connections_mutex);
             string name = cmd[1];
-            auto userit = std::find_if(connections.begin(), connections.end(),
-                [&](User const &u) { return u.username == name; }
-            );
-            if (userit != connections.end())
+            auto userit = usersbyname.find(name);
+            if (userit != usersbyname.end())
             {
-                userit->kill("Kicked by OP");
+                userit->second->kill("Kicked by OP");
                 cout << "Kicked \"" << name << "\"!" << endl;
             }
             else
@@ -509,8 +501,8 @@ void ControlServer()
             if (space_pos != string::npos)
             {
                 action.erase(0, space_pos + 1);
-                for (User &user : connections)
-                    user.write(":tinyirc NOTICE " + user.username + " :" + action + "\r\n");
+                for (User *user : connections)
+                    user->write(":tinyirc NOTICE " + user->username + " :" + action + "\r\n");
             }
             cout << "Broadcast sent to " << connections.size() << " users." << endl;
         }
@@ -524,41 +516,63 @@ void ControlServer()
 void User::kill(string const &reason)
 {
     string const quitbroadcast = ":" + username + " QUIT :" + reason + "\r\n";
-    broadcast(quitbroadcast);
+    write(":tinyirc KILL " + username + " :" + reason + "\r\n");
     close(connfd);
+    broadcast(quitbroadcast);
     for (string const &userchannel : channel)
-    {
-        auto channeliter = std::find_if(channels.begin(), channels.end(),
-                [&](Channel const& c) { return c.name == userchannel; }
-                );
         // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
-        channeliter->remove_user(*this);
-    }
-    connections.erase(std::remove_if(connections.begin(), connections.end(),
-            [&](User const &x) { return &x == this; }
-        ), connections.end());
+        channels.at(userchannel).remove_user(*this);
+    dead = true;
+    auto userit = usersbyname.find(username);
+    if (userit != usersbyname.end() && userit->second == this)
+        usersbyname.erase(userit);
 }
 
 void Channel::broadcast(string const &message)
 {
-    // TODO: Get a map, do lookup the opposite way around. Needs rethinking the vector of users.
-    for (User &connection : connections)
-        if (connection.channel.find(name) != connection.channel.end())
-            connection.write(message);
+    for (string const &username : users)
+        usersbyname.at(username)->write(message);
 }
 
 void User::broadcast(string const &message)
 {
     // Broadcast a message to everyone interested in this user
     set<User*> users;
-    for (User &observer : connections)
-        for (string const &mychan : channel)
-            if (observer.channel.find(mychan) != observer.channel.end())
-            {
-                users.insert(&observer);
-                break;
-            }
+    for (string const &channame : channel)
+        for (string const &username : channels.at(channame).users)
+            users.insert(usersbyname.at(username));
+    users.insert(this); // Just in case we're not in a channel
 
     for (User *user : users)
         user->write(message);
+}
+
+string User::try_read()
+{
+    string line;
+    char data = 0; // Reading one at a time, hack!
+    while (data != '\n')
+    {
+        ssize_t datarecv = recv(connfd, &data, 1, MSG_DONTWAIT);
+        if(datarecv == -1)
+        {
+            if (errno != EAGAIN && errno != EWOULDBLOCK)
+                kill("Connection error");
+            break;
+        }
+
+        if(datarecv == 0)
+        {
+            kill("Connection error");
+            break;
+        }
+
+        line += data;
+        if (line.size() > 2048)
+        {
+            kill("Line too long");
+            break;
+        }
+    }
+    return line;
 }
