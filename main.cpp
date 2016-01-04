@@ -22,6 +22,7 @@ extern "C" {
 #include <time.h>
 #include <sys/types.h>
 #include <err.h>
+#include <poll.h>
 }
 using namespace std;
 string remove_erase_if(string c, string delim);
@@ -135,7 +136,6 @@ map<string, User*> usersbyname; // username → user
 map<string, Channel> channels; // channel name → channel
 int listenfd = 0;
 struct sockaddr_in serv_addr;
-void AcceptConnections();
 int main(int argc,char *argv[])
 {
     //Seed RNG
@@ -165,9 +165,6 @@ int main(int argc,char *argv[])
         printf("Failed to listen\n");
         return -1;
     }
-    //spawn second thread to accept connections, so main loop doesn't get blocked
-    thread t(AcceptConnections);
-    t.detach();
     thread z(ControlServer);
     z.detach();
     //again  because we spawned a thread
@@ -418,21 +415,33 @@ int main(int argc,char *argv[])
                 }
             }
         }
-        this_thread::sleep_for(chrono::milliseconds(50));
+        connections_mutex.lock();
+        struct pollfd pollfds[connections.size() + 1] = {};
+        pollfds[0].fd = listenfd;
+        pollfds[0].events = POLLIN;
+        int i = 1;
+        for (User *user : connections)
+        {
+            pollfds[i].fd = user->connfd;
+            pollfds[i].events = POLLIN;
+            i++;
+        }
+        connections_mutex.unlock();
+
+        poll(pollfds, i, 30000);
+
+        if (pollfds[0].revents & POLLIN)
+        {
+            int connfd = accept(listenfd, nullptr, nullptr);
+            if(connfd != -1)
+            {
+                mutex_guard lock(connections_mutex);
+                connections.push_back(new User(connfd)); // accept awaiting request
+            }
+        }
+
     }
     return 0;
-}
-void AcceptConnections()
-{
-    while(1)
-    {
-        int connfd = accept(listenfd, nullptr, nullptr);
-        if(connfd != -1)
-        {
-            mutex_guard lock(connections_mutex);
-            connections.push_back(new User(connfd)); // accept awaiting request
-        }
-    }
 }
 
 void Channel::remove_user(User& user)
