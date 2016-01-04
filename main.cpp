@@ -517,8 +517,8 @@ void User::kill(string const &reason)
 {
     string const quitbroadcast = ":" + username + " QUIT :" + reason + "\r\n";
     write(":tinyirc KILL " + username + " :" + reason + "\r\n");
-    broadcast(quitbroadcast);
     close(connfd);
+    broadcast(quitbroadcast);
     for (string const &userchannel : channel)
         // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
         channels.at(userchannel).remove_user(*this);
