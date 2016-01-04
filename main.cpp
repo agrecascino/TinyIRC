@@ -418,7 +418,7 @@ int main(int argc,char *argv[])
             }
         }
         connections_mutex.lock();
-        struct pollfd pollfds[connections.size() + 1] = {};
+        pollfd *pollfds = new pollfd[connections.size() + 1];
         pollfds[0].fd = listenfd;
         pollfds[0].events = POLLIN;
         int i = 1;
@@ -441,7 +441,7 @@ int main(int argc,char *argv[])
                 connections.push_back(new User(connfd)); // accept awaiting request
             }
         }
-
+        delete[] pollfds;
     }
     return 0;
 }
