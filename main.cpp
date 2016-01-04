@@ -131,6 +131,7 @@ void split_string(string const &k, string const &delim, vector<string> &output)
 typedef lock_guard<mutex> mutex_guard;
 mutex connections_mutex; // XXX SLOW HACK to stop the server dying randomly
 vector<User*> connections;
+map<string, User*> usersbyname; // username → user
 map<string, Channel> channels; // channel name → channel
 int listenfd = 0;
 struct sockaddr_in serv_addr;
@@ -228,9 +229,8 @@ int main(int argc,char *argv[])
                             new_nick = "FAGGOT" + to_string(rand() % 9000);
 
                         bool inuse = false;
-                        for(int k =0; k < connections.size();k++)
-                            if(new_nick == connections[k]->username)
-                                inuse = true;
+                        if (usersbyname.find(new_nick) != usersbyname.end())
+                            inuse = true;
 
                         //if not authed, set username and PING, else set username
                         if(user.status == User::ConnectStatus::CONNECTED)
@@ -243,6 +243,7 @@ int main(int argc,char *argv[])
                             }
                             user.write("PING :" + user.username + "\r\n");
                             user.status = User::ConnectStatus::NICKSET;
+                            usersbyname[new_nick] = &user;
                         }
                         else
                         {
@@ -257,6 +258,8 @@ int main(int argc,char *argv[])
                                     channel.users.erase(user.username);
                                     channel.users.insert(new_nick);
                                 }
+                                usersbyname[new_nick] = &user;
+                                usersbyname.erase(user.username);
                                 user.broadcast(":" + user.username + " NICK " + new_nick + "\r\n");
                                 user.username = new_nick;
                             }
@@ -317,21 +320,21 @@ int main(int argc,char *argv[])
                         if (recip.size() == 0) break;
 
                         string buf(":" + user.username + " PRIVMSG " + recip + " :" + msg + "\r\n");
-                        if (recip[0] == '#')
+                        try
                         {
-                            for (User *observer : connections)
-                                if(observer != &user)
-                                    if (observer->channel.find(command[1]) != observer->channel.end())
-                                        observer->write(buf);
-                        }
-                        else
-                        {
-                            for (User *recipuser : connections)
-                                if (recipuser->username == recip)
+                            if (recip[0] == '#')
+                                for (string username : channels.at(recip).users)
                                 {
-                                    recipuser->write(buf);
-                                    break;
+                                    User *chanuser = usersbyname.at(username);
+                                    if (&user != chanuser)
+                                        usersbyname.at(username)->write(buf);
                                 }
+                            else
+                                usersbyname.at(recip)->write(buf);
+                        }
+                        catch (out_of_range e)
+                        {
+                           user.write(":tinyirc 401 " + user.username + " " + recip + " :No such nick/channel\r\n");
                         }
                     }
                     else if(command[0] == "MODE")
@@ -459,8 +462,8 @@ void ControlServer()
         if(cmd[0] == "list")
         {
             mutex_guard lock(connections_mutex);
-            for(int i = 0;i < connections.size();i++)
-                cout << "User: " << connections[i]->username << endl;
+            for (User *user : connections)
+                cout << "User: " << user->username << endl;
         }
         else if(cmd[0] == "kick")
         {
@@ -471,12 +474,10 @@ void ControlServer()
             }
             mutex_guard lock(connections_mutex);
             string name = cmd[1];
-            auto userit = std::find_if(connections.begin(), connections.end(),
-                [&](User const *u) { return u->username == name; }
-            );
-            if (userit != connections.end())
+            auto userit = usersbyname.find(name);
+            if (userit != usersbyname.end())
             {
-                (*userit)->kill("Kicked by OP");
+                userit->second->kill("Kicked by OP");
                 cout << "Kicked \"" << name << "\"!" << endl;
             }
             else
@@ -510,27 +511,24 @@ void User::kill(string const &reason)
         // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
         channels.at(userchannel).remove_user(*this);
     dead = true;
+    auto userit = usersbyname.find(username);
+    if (userit != usersbyname.end() && userit->second == this)
+        usersbyname.erase(userit);
 }
 
 void Channel::broadcast(string const &message)
 {
-    // TODO: Get a map, do lookup the opposite way around. Needs rethinking the vector of users.
-    for (User *connection : connections)
-        if (connection->channel.find(name) != connection->channel.end())
-            connection->write(message);
+    for (string const &username : users)
+        usersbyname.at(username)->write(message);
 }
 
 void User::broadcast(string const &message)
 {
     // Broadcast a message to everyone interested in this user
     set<User*> users;
-    for (User *observer : connections)
-        for (string const &mychan : channel)
-            if (observer->channel.find(mychan) != observer->channel.end())
-            {
-                users.insert(observer);
-                break;
-            }
+    for (string const &channame : channel)
+        for (string const &username : channels.at(channame).users)
+            users.insert(usersbyname.at(username));
 
     for (User *user : users)
         user->write(message);
