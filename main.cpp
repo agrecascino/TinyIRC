@@ -49,7 +49,6 @@ struct User
     ConnectStatus status = ConnectStatus::CONNECTED;
     int connfd;
     bool dontkick = true;
-    bool detectautisticclient = false;
     bool dead = false;
     int rticks = 0;
     set<string> channel;
@@ -338,18 +337,15 @@ int main(int argc,char *argv[])
                     }
                     else if(command[0] == "MODE")
                     {
-                        //set user mode, required for some irc clients to think you're fully connected(im looking at you xchat)
-                        //+i means no messages from people outside the channel and that mode reflects how the server works
-                        string const& channel = command[1];
-                        if(user.channel.size() != 0)
+                        string const& target = command[1];
+                        if(target.compare(0, 1, "#") == 0)
                         {
-                            user.write(":tinyirc 324 " + user.username + " " + channel + " +n" + "\r\n");
-                            user.write(":tinyirc 329 " + user.username + " " + channel + " 0 0" + "\r\n");
+                            user.write(":tinyirc 324 " + user.username + " " + target + " +n" + "\r\n");
+                            user.write(":tinyirc 329 " + user.username + " " + target + " 0 0" + "\r\n");
                         }
                         else
                         {
-                            user.detectautisticclient = true;
-                            user.write(":" + user.username + " MODE " + user.username + " :+i" + "\r\n");
+                            user.write(":tinyirc 221 " + target + " +i" + "\r\n");
                         }
                     }
                     else if(command[0] == "WHO")
@@ -393,8 +389,7 @@ int main(int argc,char *argv[])
                         user.write(":tinyirc 375 " + user.username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n");
                         user.write(":tinyirc 372 " + user.username + " :Padding call" + "\r\n");
                         user.write(":tinyirc 376 " + user.username + " :Ended" + "\r\n");
-                        if(!user.detectautisticclient)
-                            user.write(":" + user.username + " MODE " + user.username + " :+i" + "\r\n");
+                        user.write(":" + user.username + " MODE " + user.username + " :+i" + "\r\n");
                     }
                     else
                     {
