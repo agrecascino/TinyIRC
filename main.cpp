@@ -352,13 +352,18 @@ int main(int argc,char *argv[])
                             string const& target = checked_param_access(command, 1);
                             if(target.compare(0, 1, "#") == 0)
                             {
-                                user.write(":tinyirc 324 " + user.username + " " + target + " +n" + "\r\n");
-                                user.write(":tinyirc 329 " + user.username + " " + target + " 0 0" + "\r\n");
+                                if (command.size() > 2 && command[2] == "b")
+                                {
+                                    user.write(":tinyirc 368 " + user.username + " " + target + " :End of Channel Ban List\r\n");
+                                }
+                                else
+                                {
+                                    user.write(":tinyirc 324 " + user.username + " " + target + " +n" + "\r\n");
+                                    user.write(":tinyirc 329 " + user.username + " " + target + " 0 0" + "\r\n");
+                                }
                             }
                             else
-                            {
-                                user.write(":tinyirc 221 " + target + " +i" + "\r\n");
-                            }
+                                user.write(":tinyirc 221 " + target + " +i\r\n");
                         }
                         else if(command[0] == "WHO")
                         {
