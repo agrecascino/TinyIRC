@@ -138,6 +138,7 @@ string& checked_param_access(vector<string> &args, size_t index)
     throw NotEnoughParams();
 }
 
+#define FAKE_USER_HOST "!~user@host"
 typedef lock_guard<mutex> mutex_guard;
 mutex connections_mutex; // XXX SLOW HACK to stop the server dying randomly
 vector<User*> connections;
@@ -269,7 +270,7 @@ int main(int argc,char *argv[])
                                     }
                                     usersbyname[new_nick] = &user;
                                     usersbyname.erase(user.username);
-                                    user.broadcast(":" + user.username + " NICK " + new_nick + "\r\n");
+                                    user.broadcast(":" + user.username + FAKE_USER_HOST " NICK " + new_nick + "\r\n");
                                     user.username = new_nick;
                                 }
                             }
@@ -285,7 +286,7 @@ int main(int argc,char *argv[])
                             Channel &channel = channels.emplace(piecewise_construct, forward_as_tuple(channame), forward_as_tuple(channame)).first->second;
                             user.channel.insert(channame);
                             channel.users.insert(user.username);
-                            channel.broadcast(":" + user.username + " JOIN " + channame + "\r\n");
+                            channel.broadcast(":" + user.username + FAKE_USER_HOST " JOIN " + channame + "\r\n");
                             user.write(":tinyirc MODE :" + channame + " +n" + "\r\n");
                             user.write(":tinyirc 332 " + user.username + " " + channame +  " :" + channel.topic + "\r\n");
                             string msgf(":tinyirc 353 " + user.username + " = " + channame + " :");
@@ -312,7 +313,7 @@ int main(int argc,char *argv[])
                                 if (command.size() > 2)
                                 {
                                     channel.topic = command[2];
-                                    channel.broadcast(":" + user.username + " TOPIC " + command[1] + " :" + command[2] + "\r\n");
+                                    channel.broadcast(":" + user.username + FAKE_USER_HOST " TOPIC " + command[1] + " :" + command[2] + "\r\n");
                                 }
                                 else
                                 {
@@ -328,7 +329,7 @@ int main(int argc,char *argv[])
                             string recip = command[1];
                             if (recip.size() == 0) break;
 
-                            string buf(":" + user.username + " PRIVMSG " + recip + " :" + msg + "\r\n");
+                            string buf(":" + user.username + FAKE_USER_HOST " PRIVMSG " + recip + " :" + msg + "\r\n");
                             try
                             {
                                 if (recip[0] == '#')
@@ -400,7 +401,7 @@ int main(int argc,char *argv[])
                             user.write(":tinyirc 375 " + user.username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n");
                             user.write(":tinyirc 372 " + user.username + " :Padding call" + "\r\n");
                             user.write(":tinyirc 376 " + user.username + " :Ended" + "\r\n");
-                            user.write(":" + user.username + " MODE " + user.username + " :+i" + "\r\n");
+                            user.write(":" + user.username + FAKE_USER_HOST " MODE " + user.username + " :+i" + "\r\n");
                         }
                         else
                         {
@@ -468,7 +469,7 @@ void Channel::remove_user(User& user)
 
 void Channel::notify_part(User &user, string const& reason)
 {
-    broadcast(":" + user.username + " PART " + name + " " + reason + "\r\n");
+    broadcast(":" + user.username + FAKE_USER_HOST " PART " + name + " " + reason + "\r\n");
 }
 
 void ControlServer()
@@ -526,7 +527,7 @@ void ControlServer()
 
 void User::kill(string const &reason)
 {
-    string const quitbroadcast = ":" + username + " QUIT :" + reason + "\r\n";
+    string const quitbroadcast = ":" + username + FAKE_USER_HOST " QUIT :" + reason + "\r\n";
     write(":tinyirc KILL " + username + " :" + reason + "\r\n");
     close(connfd);
     broadcast(quitbroadcast);
