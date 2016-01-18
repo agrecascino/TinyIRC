@@ -221,13 +221,13 @@ int main(int argc,char *argv[])
                         else if(command[0] == "PONG" && user.status == User::ConnectStatus::NICKSET)
                         {
                             //oh nice, you accepted our PING, welcome to the party
-                            user.write(":tinyirc 001 " + user.username + " :Hello!" + "\r\n");
-                            user.write(":tinyirc 002 " + user.username + " :This server is running TinyIRC pre-alpha!" + "\r\n");
-                            user.write(":tinyirc 003 " + user.username + " :This server doesn't have date tracking." + "\r\n");
-                            user.write(":tinyirc 004 " + user.username + " tinyirc " + " tinyirc(0.0.1) " + "CDGNRSUWagilopqrswxyz" + " BCIMNORSabcehiklmnopqstvz" + " Iabehkloqv" + "\r\n");
+                            user.write(":tinyirc 001 " + user.username + " :Hello!\r\n");
+                            user.write(":tinyirc 002 " + user.username + " :This server is running TinyIRC pre-alpha!\r\n");
+                            user.write(":tinyirc 003 " + user.username + " :This server doesn't have date tracking.\r\n");
+                            user.write(":tinyirc 004 " + user.username + " tinyirc  tinyirc(0.0.1) CDGNRSUWagilopqrswxyz BCIMNORSabcehiklmnopqstvz Iabehkloqv\r\n");
                             user.write(":tinyirc 005 " + user.username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n");
                             user.write(":tinyirc 005 " + user.username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n");
-                            user.write(":tinyirc 251 " + user.username + " :LUSERS is unimplemented." + "\r\n");
+                            user.write(":tinyirc 251 " + user.username + " :LUSERS is unimplemented.\r\n");
                             user.status = User::ConnectStatus::READY;
 
                             user.dontkick = true;
@@ -287,7 +287,7 @@ int main(int argc,char *argv[])
                             user.channel.insert(channame);
                             channel.users.insert(user.username);
                             channel.broadcast(":" + user.username + FAKE_USER_HOST " JOIN " + channame + "\r\n");
-                            user.write(":tinyirc MODE :" + channame + " +n" + "\r\n");
+                            user.write(":tinyirc MODE :" + channame + " +n\r\n");
                             user.write(":tinyirc 332 " + user.username + " " + channame +  " :" + channel.topic + "\r\n");
                             string msgf(":tinyirc 353 " + user.username + " = " + channame + " :");
                             for(string const &chanuser : channel.users)
@@ -358,8 +358,8 @@ int main(int argc,char *argv[])
                                 }
                                 else
                                 {
-                                    user.write(":tinyirc 324 " + user.username + " " + target + " +n" + "\r\n");
-                                    user.write(":tinyirc 329 " + user.username + " " + target + " 0 0" + "\r\n");
+                                    user.write(":tinyirc 324 " + user.username + " " + target + " +n\r\n");
+                                    user.write(":tinyirc 329 " + user.username + " " + target + " 0 0\r\n");
                                 }
                             }
                             else
@@ -397,16 +397,16 @@ int main(int argc,char *argv[])
                         else if(command[0] == "PROTOCTL")
                         {
                             //gives capabilities of the server, some irc clients dont send one for some reason (im looking at you two irssi and weechat)
-                            user.write(":tinyirc 252 " + user.username + " 0 :IRC Operators online" + "\r\n");
-                            user.write(":tinyirc 253 " + user.username + " 0 :unknown connections" + "\r\n");
-                            user.write(":tinyirc 254 " + user.username + " 0 :LUSERS is unimplmented" + "\r\n");
-                            user.write(":tinyirc 255 " + user.username + " :LUSERS is unimplmented" + "\r\n");
-                            user.write(":tinyirc 265 " + user.username + " 1 1 :LUSERS is unimplmented" + "\r\n");
-                            user.write(":tinyirc 266 " + user.username + " 1 1 :LUSERS is unimplmented" + "\r\n");
-                            user.write(":tinyirc 375 " + user.username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n");
-                            user.write(":tinyirc 372 " + user.username + " :Padding call" + "\r\n");
-                            user.write(":tinyirc 376 " + user.username + " :Ended" + "\r\n");
-                            user.write(":" + user.username + FAKE_USER_HOST " MODE " + user.username + " :+i" + "\r\n");
+                            user.write(":tinyirc 252 " + user.username + " 0 :IRC Operators online\r\n");
+                            user.write(":tinyirc 253 " + user.username + " 0 :unknown connections\r\n");
+                            user.write(":tinyirc 254 " + user.username + " 0 :LUSERS is unimplmented\r\n");
+                            user.write(":tinyirc 255 " + user.username + " :LUSERS is unimplmented\r\n");
+                            user.write(":tinyirc 265 " + user.username + " 1 1 :LUSERS is unimplmented\r\n");
+                            user.write(":tinyirc 266 " + user.username + " 1 1 :LUSERS is unimplmented\r\n");
+                            user.write(":tinyirc 375 " + user.username + " 1 1 :Welcome to tinyirc pre-alpha!\r\n");
+                            user.write(":tinyirc 372 " + user.username + " :Padding call\r\n");
+                            user.write(":tinyirc 376 " + user.username + " :Ended\r\n");
+                            user.write(":" + user.username + FAKE_USER_HOST " MODE " + user.username + " :+i\r\n");
                         }
                         else
                         {
