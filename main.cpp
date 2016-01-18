@@ -129,6 +129,15 @@ void split_string(string const &k, string const &delim, vector<string> &output)
     output.emplace_back(last_ptr);
 }
 
+class NotEnoughParams {};
+
+string& checked_param_access(vector<string> &args, size_t index)
+{
+    if (args.size() > index)  // basically .at() with a custom exception
+        return args[index];
+    throw NotEnoughParams();
+}
+
 typedef lock_guard<mutex> mutex_guard;
 mutex connections_mutex; // XXX SLOW HACK to stop the server dying randomly
 vector<User*> connections;
@@ -191,209 +200,216 @@ int main(int argc,char *argv[])
                 vector<string> command = parse_irc_command(command_str);
                 if (!command.empty())
                 {
-                    cout << "\033[91m← " << user.username << "\t" << command_str << "\033[m" << endl;
-                    if(command[0] == "USER")
+                    try
                     {
-                        //stub incase anyone wants to implement authentication
-                    }
-                    else if(command[0] == "PING")
-                    {
-                        user.write(":tinyirc PONG :" + command[1] + "\r\n");
-                    }
-                    else if(command[0] == "PONG" && user.status != User::ConnectStatus::NICKSET)
-                    {
-                        //reset anti-drop
-                        user.dontkick = true;
-                        user.rticks = 0;
-                    }
-                    else if(command[0] == "PONG" && user.status == User::ConnectStatus::NICKSET)
-                    {
-                        //oh nice, you accepted our PING, welcome to the party
-                        user.write(":tinyirc 001 " + user.username + " :Hello!" + "\r\n");
-                        user.write(":tinyirc 002 " + user.username + " :This server is running TinyIRC pre-alpha!" + "\r\n");
-                        user.write(":tinyirc 003 " + user.username + " :This server doesn't have date tracking." + "\r\n");
-                        user.write(":tinyirc 004 " + user.username + " tinyirc " + " tinyirc(0.0.1) " + "CDGNRSUWagilopqrswxyz" + " BCIMNORSabcehiklmnopqstvz" + " Iabehkloqv" + "\r\n");
-                        user.write(":tinyirc 005 " + user.username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n");
-                        user.write(":tinyirc 005 " + user.username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n");
-                        user.write(":tinyirc 251 " + user.username + " :LUSERS is unimplemented." + "\r\n");
-                        user.status = User::ConnectStatus::READY;
-
-                        user.dontkick = true;
-                    }
-                    else if(command[0] == "NICK")
-                    {
-                        string new_nick = remove_erase_if(command[1], ".,#\r");
-                        if(new_nick.size() > 225 || new_nick.size() == 0)
-                            new_nick = "FAGGOT" + to_string(rand() % 9000);
-
-                        bool inuse = false;
-                        if (usersbyname.find(new_nick) != usersbyname.end())
-                            inuse = true;
-
-                        //if not authed, set username and PING, else set username
-                        if(user.status == User::ConnectStatus::CONNECTED)
+                        cout << "\033[91m← " << user.username << "\t" << command_str << "\033[m" << endl;
+                        if(command[0] == "USER")
                         {
-                            user.username = new_nick;
-                            if(inuse)
-                            {
-                                user.kill("Nick already in use");
-                                continue;
-                            }
-                            user.write("PING :" + user.username + "\r\n");
-                            user.status = User::ConnectStatus::NICKSET;
-                            usersbyname[new_nick] = &user;
+                            //stub incase anyone wants to implement authentication
                         }
-                        else
+                        else if(command[0] == "PING")
                         {
-                            if(inuse)
-                                user.write(":tinyirc " "NOTICE :*** Name already in use..." "\r\n");
-                            else
+                            user.write(":tinyirc PONG :" + checked_param_access(command, 1) + "\r\n");
+                        }
+                        else if(command[0] == "PONG" && user.status != User::ConnectStatus::NICKSET)
+                        {
+                            //reset anti-drop
+                            user.dontkick = true;
+                            user.rticks = 0;
+                        }
+                        else if(command[0] == "PONG" && user.status == User::ConnectStatus::NICKSET)
+                        {
+                            //oh nice, you accepted our PING, welcome to the party
+                            user.write(":tinyirc 001 " + user.username + " :Hello!" + "\r\n");
+                            user.write(":tinyirc 002 " + user.username + " :This server is running TinyIRC pre-alpha!" + "\r\n");
+                            user.write(":tinyirc 003 " + user.username + " :This server doesn't have date tracking." + "\r\n");
+                            user.write(":tinyirc 004 " + user.username + " tinyirc " + " tinyirc(0.0.1) " + "CDGNRSUWagilopqrswxyz" + " BCIMNORSabcehiklmnopqstvz" + " Iabehkloqv" + "\r\n");
+                            user.write(":tinyirc 005 " + user.username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n");
+                            user.write(":tinyirc 005 " + user.username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n");
+                            user.write(":tinyirc 251 " + user.username + " :LUSERS is unimplemented." + "\r\n");
+                            user.status = User::ConnectStatus::READY;
+
+                            user.dontkick = true;
+                        }
+                        else if(command[0] == "NICK")
+                        {
+                            string new_nick = remove_erase_if(checked_param_access(command, 1), ".,#\r");
+                            if(new_nick.size() > 225 || new_nick.size() == 0)
+                                new_nick = "FAGGOT" + to_string(rand() % 9000);
+
+                            bool inuse = false;
+                            if (usersbyname.find(new_nick) != usersbyname.end())
+                                inuse = true;
+
+                            //if not authed, set username and PING, else set username
+                            if(user.status == User::ConnectStatus::CONNECTED)
                             {
-                                // Update nick in all channels
-                                for (string const &channelname : user.channel)
-                                {
-                                    Channel &channel = channels.at(channelname);
-                                    channel.users.erase(user.username);
-                                    channel.users.insert(new_nick);
-                                }
-                                usersbyname[new_nick] = &user;
-                                usersbyname.erase(user.username);
-                                user.broadcast(":" + user.username + " NICK " + new_nick + "\r\n");
                                 user.username = new_nick;
-                            }
-                        }
-                    }
-                    else if(command[0] == "JOIN")
-                    {
-                        string channame = command[1];
-                        // TODO handle comma separated chan joins?
-                        channame = remove_erase_if(channame,":,. \r");
-                        if(channame [0] != '#')
-                            channame.insert(0,"#");
-
-                        Channel &channel = channels.emplace(piecewise_construct, forward_as_tuple(channame), forward_as_tuple(channame)).first->second;
-                        user.channel.insert(channame);
-                        channel.users.insert(user.username);
-                        channel.broadcast(":" + user.username + " JOIN " + channame + "\r\n");
-                        user.write(":tinyirc MODE :" + channame + " +n" + "\r\n");
-                        user.write(":tinyirc 332 " + user.username + " " + channame +  " :" + channel.topic + "\r\n");
-                        string msgf(":tinyirc 353 " + user.username + " = " + channame + " :");
-                        for(string const &chanuser : channel.users)
-                        {
-                            msgf += chanuser;
-                            msgf += " ";
-                        }
-                        msgf.erase(msgf.end() - 1);
-                        msgf += "\r\n";
-                        user.write(msgf);
-                        user.write(":tinyirc 366 " + user.username + " " + channame + " :Sucessfully joined channel." +"\r\n");
-                    }
-                    else if(command[0] == "TOPIC")
-                    {
-                        auto channel_iter = channels.find(command[1]);
-                        if (channel_iter == channels.end())
-                        {
-                            user.write(":tinyirc 403 " + user.username + " " + command[1] + " :No such channel\r\n");
-                        }
-                        else
-                        {
-                            Channel &channel = channel_iter->second;
-                            if (command.size() > 2)
-                            {
-                                channel.topic = command[2];
-                                channel.broadcast(":" + user.username + " TOPIC " + command[1] + " :" + command[2] + "\r\n");
-                            }
-                            else
-                            {
-                                user.write(":tinyirc 332 " + user.username + " " + command[1] + " :" + channel.topic + "\r\n");
-                            }
-                        }
-                    }
-                    else if(command[0] == "PRIVMSG")
-                    {
-                        //send privmsg to all other users in channel
-                        // TODO: warning if channel/user doesn't exist
-                        string recip = command[1];
-                        string msg = command[2];
-                        if (recip.size() == 0) break;
-
-                        string buf(":" + user.username + " PRIVMSG " + recip + " :" + msg + "\r\n");
-                        try
-                        {
-                            if (recip[0] == '#')
-                                for (string username : channels.at(recip).users)
+                                if(inuse)
                                 {
-                                    User *chanuser = usersbyname.at(username);
-                                    if (&user != chanuser)
-                                        usersbyname.at(username)->write(buf);
+                                    user.kill("Nick already in use");
+                                    continue;
                                 }
+                                user.write("PING :" + user.username + "\r\n");
+                                user.status = User::ConnectStatus::NICKSET;
+                                usersbyname[new_nick] = &user;
+                            }
                             else
-                                usersbyname.at(recip)->write(buf);
+                            {
+                                if(inuse)
+                                    user.write(":tinyirc " "NOTICE :*** Name already in use..." "\r\n");
+                                else
+                                {
+                                    // Update nick in all channels
+                                    for (string const &channelname : user.channel)
+                                    {
+                                        Channel &channel = channels.at(channelname);
+                                        channel.users.erase(user.username);
+                                        channel.users.insert(new_nick);
+                                    }
+                                    usersbyname[new_nick] = &user;
+                                    usersbyname.erase(user.username);
+                                    user.broadcast(":" + user.username + " NICK " + new_nick + "\r\n");
+                                    user.username = new_nick;
+                                }
+                            }
                         }
-                        catch (out_of_range e)
+                        else if(command[0] == "JOIN")
                         {
-                           user.write(":tinyirc 401 " + user.username + " " + recip + " :No such nick/channel\r\n");
+                            string channame = checked_param_access(command, 1);
+                            // TODO handle comma separated chan joins?
+                            channame = remove_erase_if(channame,":,. \r");
+                            if(channame [0] != '#')
+                                channame.insert(0,"#");
+
+                            Channel &channel = channels.emplace(piecewise_construct, forward_as_tuple(channame), forward_as_tuple(channame)).first->second;
+                            user.channel.insert(channame);
+                            channel.users.insert(user.username);
+                            channel.broadcast(":" + user.username + " JOIN " + channame + "\r\n");
+                            user.write(":tinyirc MODE :" + channame + " +n" + "\r\n");
+                            user.write(":tinyirc 332 " + user.username + " " + channame +  " :" + channel.topic + "\r\n");
+                            string msgf(":tinyirc 353 " + user.username + " = " + channame + " :");
+                            for(string const &chanuser : channel.users)
+                            {
+                                msgf += chanuser;
+                                msgf += " ";
+                            }
+                            msgf.erase(msgf.end() - 1);
+                            msgf += "\r\n";
+                            user.write(msgf);
+                            user.write(":tinyirc 366 " + user.username + " " + channame + " :Sucessfully joined channel." +"\r\n");
                         }
-                    }
-                    else if(command[0] == "MODE")
-                    {
-                        string const& target = command[1];
-                        if(target.compare(0, 1, "#") == 0)
+                        else if(command[0] == "TOPIC")
                         {
-                            user.write(":tinyirc 324 " + user.username + " " + target + " +n" + "\r\n");
-                            user.write(":tinyirc 329 " + user.username + " " + target + " 0 0" + "\r\n");
+                            auto channel_iter = channels.find(checked_param_access(command, 1));
+                            if (channel_iter == channels.end())
+                            {
+                                user.write(":tinyirc 403 " + user.username + " " + command[1] + " :No such channel\r\n");
+                            }
+                            else
+                            {
+                                Channel &channel = channel_iter->second;
+                                if (command.size() > 2)
+                                {
+                                    channel.topic = command[2];
+                                    channel.broadcast(":" + user.username + " TOPIC " + command[1] + " :" + command[2] + "\r\n");
+                                }
+                                else
+                                {
+                                    user.write(":tinyirc 332 " + user.username + " " + command[1] + " :" + channel.topic + "\r\n");
+                                }
+                            }
+                        }
+                        else if(command[0] == "PRIVMSG")
+                        {
+                            //send privmsg to all other users in channel
+                            // TODO: warning if channel/user doesn't exist
+                            string msg = checked_param_access(command, 2);
+                            string recip = command[1];
+                            if (recip.size() == 0) break;
+
+                            string buf(":" + user.username + " PRIVMSG " + recip + " :" + msg + "\r\n");
+                            try
+                            {
+                                if (recip[0] == '#')
+                                    for (string username : channels.at(recip).users)
+                                    {
+                                        User *chanuser = usersbyname.at(username);
+                                        if (&user != chanuser)
+                                            usersbyname.at(username)->write(buf);
+                                    }
+                                else
+                                    usersbyname.at(recip)->write(buf);
+                            }
+                            catch (out_of_range e)
+                            {
+                                user.write(":tinyirc 401 " + user.username + " " + recip + " :No such nick/channel\r\n");
+                            }
+                        }
+                        else if(command[0] == "MODE")
+                        {
+                            string const& target = checked_param_access(command, 1);
+                            if(target.compare(0, 1, "#") == 0)
+                            {
+                                user.write(":tinyirc 324 " + user.username + " " + target + " +n" + "\r\n");
+                                user.write(":tinyirc 329 " + user.username + " " + target + " 0 0" + "\r\n");
+                            }
+                            else
+                            {
+                                user.write(":tinyirc 221 " + target + " +i" + "\r\n");
+                            }
+                        }
+                        else if(command[0] == "WHO")
+                        {
+                            auto const channel_iter = channels.find(checked_param_access(command, 1));
+                            if (channel_iter != channels.end())
+                                for(string const &chanuser : channel_iter->second.users)
+                                    user.write(":tinyirc 352 " + user.username + " " + command[1] + " tinyirc " + chanuser + "\r\n");
+                            user.write(":tinyirc 315 " + user.username + " " + command[1] + " :End of /WHO list.\r\n");
+                        }
+                        else if(command[0] == "QUIT")
+                        {
+                            user.kill("Quit");
+                        }
+                        else if(command[0] == "PART")
+                        {
+                            vector<string> ctol;
+                            split_string(string(checked_param_access(command, 1)),",",ctol);
+                            string reason = command.size() > 2 ? command[2] : "Leaving";
+
+                            for (string &chantopart : ctol)
+                            {
+                                auto channeliter = channels.find(chantopart);
+                                if (channeliter == channels.end())
+                                    continue; // Don't part a channel that doesn't exist
+
+                                Channel &channel = channeliter->second;
+                                channel.notify_part(user, reason);
+                                channel.remove_user(user);
+                            }
+                        }
+                        else if(command[0] == "PROTOCTL")
+                        {
+                            //gives capabilities of the server, some irc clients dont send one for some reason (im looking at you two irssi and weechat)
+                            user.write(":tinyirc 252 " + user.username + " 0 :IRC Operators online" + "\r\n");
+                            user.write(":tinyirc 253 " + user.username + " 0 :unknown connections" + "\r\n");
+                            user.write(":tinyirc 254 " + user.username + " 0 :LUSERS is unimplmented" + "\r\n");
+                            user.write(":tinyirc 255 " + user.username + " :LUSERS is unimplmented" + "\r\n");
+                            user.write(":tinyirc 265 " + user.username + " 1 1 :LUSERS is unimplmented" + "\r\n");
+                            user.write(":tinyirc 266 " + user.username + " 1 1 :LUSERS is unimplmented" + "\r\n");
+                            user.write(":tinyirc 375 " + user.username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n");
+                            user.write(":tinyirc 372 " + user.username + " :Padding call" + "\r\n");
+                            user.write(":tinyirc 376 " + user.username + " :Ended" + "\r\n");
+                            user.write(":" + user.username + " MODE " + user.username + " :+i" + "\r\n");
                         }
                         else
                         {
-                            user.write(":tinyirc 221 " + target + " +i" + "\r\n");
+                            user.write(":tinyirc 421 " + user.username + " " + command[0] + " :Unknown command\r\n");
                         }
                     }
-                    else if(command[0] == "WHO")
+                    catch (NotEnoughParams ex)
                     {
-                        auto const channel_iter = channels.find(command[1]);
-                        if (channel_iter != channels.end())
-                            for(string const &chanuser : channel_iter->second.users)
-                                user.write(":tinyirc 352 " + user.username + " " + command[1] + " tinyirc " + chanuser + "\r\n");
-                        user.write(":tinyirc 315 " + user.username + " " + command[1] + " :End of /WHO list.\r\n");
-                    }
-                    else if(command[0] == "QUIT")
-                    {
-                        user.kill("Quit");
-                    }
-                    else if(command[0] == "PART")
-                    {
-                        vector<string> ctol;
-                        split_string(string(command[1]),",",ctol);
-                        string reason = command.size() > 2 ? command[2] : "Leaving";
-
-                        for (string &chantopart : ctol)
-                        {
-                            auto channeliter = channels.find(chantopart);
-                            if (channeliter == channels.end())
-                                continue; // Don't part a channel that doesn't exist
-
-                            Channel &channel = channeliter->second;
-                            channel.notify_part(user, reason);
-                            channel.remove_user(user);
-                        }
-                    }
-                    else if(command[0] == "PROTOCTL")
-                    {
-                        //gives capabilities of the server, some irc clients dont send one for some reason (im looking at you two irssi and weechat)
-                        user.write(":tinyirc 252 " + user.username + " 0 :IRC Operators online" + "\r\n");
-                        user.write(":tinyirc 253 " + user.username + " 0 :unknown connections" + "\r\n");
-                        user.write(":tinyirc 254 " + user.username + " 0 :LUSERS is unimplmented" + "\r\n");
-                        user.write(":tinyirc 255 " + user.username + " :LUSERS is unimplmented" + "\r\n");
-                        user.write(":tinyirc 265 " + user.username + " 1 1 :LUSERS is unimplmented" + "\r\n");
-                        user.write(":tinyirc 266 " + user.username + " 1 1 :LUSERS is unimplmented" + "\r\n");
-                        user.write(":tinyirc 375 " + user.username + " 1 1 :Welcome to tinyirc pre-alpha!" + "\r\n");
-                        user.write(":tinyirc 372 " + user.username + " :Padding call" + "\r\n");
-                        user.write(":tinyirc 376 " + user.username + " :Ended" + "\r\n");
-                        user.write(":" + user.username + " MODE " + user.username + " :+i" + "\r\n");
-                    }
-                    else
-                    {
-                        user.write(":tinyirc 421 " + user.username + " " + command[0] + " :Unknown command\r\n");
+                        user.write(":tinyirc 461 " + user.username + " " + command[0] + " :Not enough parameters\r\n");
                     }
                 }
 
