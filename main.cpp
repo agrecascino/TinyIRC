@@ -277,8 +277,12 @@ int main(int argc,char *argv[])
                         }
                         else if(command[0] == "JOIN")
                         {
-                            string channame = checked_param_access(command, 1);
-                            // TODO handle comma separated chan joins?
+                            string splittablechanname = checked_param_access(command, 1);
+                            vector<string> commachannels;
+                            split_string(splittablechanname,",",commachannels);
+                            // TODO remove this todo // TODO handle comma separated chan joins?
+                            for(string channame : commachannels)
+                            {
                             channame = remove_erase_if(channame,":,. \r");
                             if(channame [0] != '#')
                                 channame.insert(0,"#");
@@ -288,7 +292,7 @@ int main(int argc,char *argv[])
                             channel.users.insert(user.username);
                             channel.broadcast(":" + user.username + FAKE_USER_HOST " JOIN " + channame + "\r\n");
                             user.write(":tinyirc MODE :" + channame + " +n\r\n");
-                            user.write(":tinyirc 332 " + user.username + " " + channame +  " :" + channel.topic + "\r\n");
+                            user.write(":tinyirc 332 " + user.username + " " +channame +  " :" + channel.topic + "\r\n");
                             string msgf(":tinyirc 353 " + user.username + " = " + channame + " :");
                             for(string const &chanuser : channel.users)
                             {
@@ -299,6 +303,7 @@ int main(int argc,char *argv[])
                             msgf += "\r\n";
                             user.write(msgf);
                             user.write(":tinyirc 366 " + user.username + " " + channame + " :Sucessfully joined channel." +"\r\n");
+                            }
                         }
                         else if(command[0] == "TOPIC")
                         {
