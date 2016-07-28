@@ -187,8 +187,6 @@ int main(int argc,char *argv[])
 
             auto dead_connections = std::remove_if(connections.begin(), connections.end(),
                         [&](User const *u){ return u->dead; });
-            for (auto it = dead_connections; it != connections.end(); it++)
-                delete *it;
             connections.erase(dead_connections, connections.end());
 
             for (User *puser : connections)
@@ -226,7 +224,7 @@ int main(int argc,char *argv[])
                             user.write(":tinyirc 003 " + user.username + " :This server doesn't have date tracking.\r\n");
                             user.write(":tinyirc 004 " + user.username + " tinyirc  tinyirc(0.0.1) CDGNRSUWagilopqrswxyz BCIMNORSabcehiklmnopqstvz Iabehkloqv\r\n");
                             user.write(":tinyirc 005 " + user.username + " CALLERID CASEMAPPING=rfc1459 DEAF=D KICKLEN=180 MODES=4 PREFIX=(qaohv)~&@%+ STATUSMSG=~&@%+ EXCEPTS=e INVEX=I NICKLEN=30 NETWORK=tinyirc MAXLIST=beI:250 MAXTARGETS=4 :are supported by this server\r\n");
-                            user.write(":tinyirc 005 " + user.username + " CHANTYPES=# CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n");
+                            user.write(":tinyirc 005 " + user.username + " CHANTYPES=#,& CHANLIMIT=#:500 CHANNELLEN=50 TOPICLEN=390 CHANMODES=beI,k,l,BCMNORScimnpstz AWAYLEN=180 WATCH=60 NAMESX UHNAMES KNOCK ELIST=CMNTU SAFELIST :are supported by this server\r\n");
                             user.write(":tinyirc 251 " + user.username + " :LUSERS is unimplemented.\r\n");
                             user.status = User::ConnectStatus::READY;
 
@@ -283,15 +281,19 @@ int main(int argc,char *argv[])
                             // TODO remove this todo // TODO handle comma separated chan joins?
                             for(string channame : commachannels)
                             {
+                            bool already_in = false;
+                            for(Channel channel : user.channel)
+                                if(channel.name == channame)
+                                    already_in = true;
+                            if(already_in) continue;
                             channame = remove_erase_if(channame,":,. \r");
-                            if(channame [0] != '#')
+                            if(channame [0] != '#' && channame[0] != '&')
                                 channame.insert(0,"#");
 
                             Channel &channel = channels.emplace(piecewise_construct, forward_as_tuple(channame), forward_as_tuple(channame)).first->second;
                             user.channel.insert(channame);
                             channel.users.insert(user.username);
                             channel.broadcast(":" + user.username + FAKE_USER_HOST " JOIN " + channame + "\r\n");
-                            user.write(":tinyirc MODE :" + channame + " +n\r\n");
                             user.write(":tinyirc 332 " + user.username + " " +channame +  " :" + channel.topic + "\r\n");
                             string msgf(":tinyirc 353 " + user.username + " = " + channame + " :");
                             for(string const &chanuser : channel.users)
@@ -337,7 +339,7 @@ int main(int argc,char *argv[])
                             string buf(":" + user.username + FAKE_USER_HOST " PRIVMSG " + recip + " :" + msg + "\r\n");
                             try
                             {
-                                if (recip[0] == '#')
+                                if (recip[0] == '#' || recip[0] == '&')
                                     for (string username : channels.at(recip).users)
                                     {
                                         User *chanuser = usersbyname.at(username);
@@ -540,14 +542,14 @@ void User::kill(string const &reason)
     string const quitbroadcast = ":" + username + FAKE_USER_HOST " QUIT :" + reason + "\r\n";
     write(":tinyirc KILL " + username + " :" + reason + "\r\n");
     close(connfd);
-    broadcast(quitbroadcast);
-    for (string const &userchannel : set<string>(channel))
+    for (const string &userchannel : set<string>(channel))
         // Assume channel exists. Otherwise, we fucked up elsewhere and will break here.
         channels.at(userchannel).remove_user(*this);
     dead = true;
     auto userit = usersbyname.find(username);
     if (userit != usersbyname.end() && userit->second == this)
         usersbyname.erase(userit);
+    broadcast(quitbroadcast);
 }
 
 void Channel::broadcast(string const &message)
