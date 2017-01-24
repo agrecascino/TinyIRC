@@ -1,0 +1,9 @@
+[Unit]
+Description=TinyIRC Service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/tinyircd
+
+[Install]
+WantedBy=multi-user.target
